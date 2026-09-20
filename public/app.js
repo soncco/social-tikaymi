@@ -5,7 +5,7 @@ let K = {}, tab = 'panel';
 const FAM = { atencion: 'Atención', intencion: 'Intención', negocio: 'Negocio' };
 const CONF = { datos_insuficientes: 'Datos insuficientes', senal_inicial: 'Señal inicial', patron_probable: 'Patrón probable', patron_confirmado: 'Patrón confirmado' };
 const TIPO = { observado: 'Observado', interpretacion: 'Interpretación', recomendacion: 'Recomendación', hipotesis: 'Hipótesis' };
-const TABS = { panel: 'Panel', objetivos: 'Objetivos', posts: 'Publicaciones', importar: 'Importar CSV', leads: 'Leads', aprendizajes: 'Aprendizajes' };
+const TABS = { panel: 'Panel', objetivos: 'Objetivos', posts: 'Publicaciones', importar: 'Importar CSV', leads: 'Leads', aprendizajes: 'Aprendizajes', calendario: 'Calendario', enlaces: 'Enlaces', carrusel: 'Carrusel' };
 const LBL = k => String(k).replace(/_/g, ' ');
 const opts = (list, sel) => list.map(o => `<option value="${esc(o)}"${o === sel ? ' selected' : ''}>${esc(LBL(o))}</option>`).join('');
 
@@ -181,6 +181,60 @@ async function aprendizajes() {
   $('#f').onsubmit = guard(async e => { e.preventDefault(); const d = formData(e.target); if (d.post_id) d.post_id = Number(d.post_id); await api('/learnings', 'POST', d); toast('Guardado'); go('aprendizajes'); });
 }
 
-const views = { panel, objetivos, posts, importar, leads, aprendizajes };
+/* ---------- Calendario editorial ---------- */
+const ESTADOS = ['borrador', 'revision', 'aprobado', 'programado', 'publicado', 'analizado'];
+async function calendario() {
+  const list = await api('/posts');
+  const col = e => list.filter(p => (p.estado || 'borrador') === e);
+  $('#view').innerHTML = `<h2>Calendario editorial</h2>` + ESTADOS.map((e, i) => {
+    const ps = col(e);
+    return `<div class="card"><h3 style="margin-top:0">${esc(LBL(e))} <small>(${ps.length})</small></h3>` + (ps.length ? ps.map(p =>
+      `<p>${i > 0 ? `<button class="ghost" data-id="${esc(p.id)}" data-to="${esc(ESTADOS[i - 1])}">&larr; ${esc(LBL(ESTADOS[i - 1]))}</button> ` : ''}<b>${esc(p.titulo)}</b> <small class="mute">${esc(p.plataforma)} ${esc(p.fecha)}</small>${i < ESTADOS.length - 1 ? ` <button data-id="${esc(p.id)}" data-to="${esc(ESTADOS[i + 1])}">${esc(LBL(ESTADOS[i + 1]))} &rarr;</button>` : ''}</p>`).join('') : '<p class="mute">Sin publicaciones.</p>') + '</div>';
+  }).join('');
+  $('#view').onclick = guard(async e => {
+    const { id, to } = e.target.dataset || {}; if (!id || !to) return;
+    if (to === 'aprobado' && !confirm('¿Confirmas que una persona revisó y aprueba esta publicación? La aprobación debe ser humana.')) return;
+    await api('/posts/' + encodeURIComponent(id), 'PUT', { estado: to });
+    toast('Estado: ' + LBL(to)); go('calendario');
+  });
+}
+
+/* ---------- Enlaces ---------- */
+async function enlaces() {
+  $('#view').innerHTML = `<h2>Enlaces rastreables</h2><form class="card form" id="f"><label>Campaign code *<input name="campaign_code" required></label>
+  <label>Plataforma<select name="plataforma"><option value="">—</option>${opts(K.PLATAFORMAS)}</select></label>
+  <label>URL del sitio<input name="site_url" type="url" placeholder="https://…"></label><label>WhatsApp<input name="whatsapp" placeholder="51999999999"></label><div><button>Generar</button></div></form><div id="out"></div>`;
+  $('#f').onsubmit = guard(async e => {
+    e.preventDefault();
+    const r = await api('/links', 'POST', formData(e.target));
+    $('#out').innerHTML = Object.entries(r).map(([k, v]) => `<div class="card"><small>${esc(LBL(k))}</small><br><code>${esc(v)}</code> <button class="ghost" data-c="${esc(k)}">Copiar</button></div>`).join('');
+    $('#out').onclick = guard(async ev => {
+      const k = ev.target.dataset?.c; if (!k) return;
+      await navigator.clipboard.writeText(String(r[k])); toast('Copiado');
+    });
+  });
+}
+
+/* ---------- Carrusel ---------- */
+const SLIDES_EJ = [{ layout: 'portada', data: {} }, { layout: 'cierre', data: {} }];
+async function carrusel() {
+  $('#view').innerHTML = `<h2>Exportar carrusel</h2><form class="card form" id="f"><label>Tipo<select name="tipo"><option value="producto">producto</option><option value="informativo">informativo</option></select></label>
+  <label class="full">Slides (JSON [{layout, data}])<textarea name="slides" rows="14" spellcheck="false">${esc(JSON.stringify(SLIDES_EJ, null, 2))}</textarea></label>
+  <div class="full"><button>Exportar y descargar JSON</button></div></form>
+  <p class="mute">Carga el archivo descargado en «Tikaymi - Constructor de Carruseles.html» con el botón «Cargar JSON».</p>`;
+  $('#f').onsubmit = guard(async e => {
+    e.preventDefault();
+    let slides; try { slides = JSON.parse(e.target.slides.value); } catch { throw new Error('JSON de slides inválido'); }
+    const tipo = e.target.tipo.value;
+    const r = await api('/export/carousel', 'POST', { tipo, slides });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 2)], { type: 'application/json' }));
+    a.download = `tikaymi-${tipo}-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast('JSON descargado');
+  });
+}
+
+const views = { panel, objetivos, posts, importar, leads, aprendizajes, calendario, enlaces, carrusel };
 window.go = go;
 api('/constants').then(start).catch(() => showLogin());
