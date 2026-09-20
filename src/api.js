@@ -5,8 +5,14 @@ const { buildLinks } = require('./modules/attribution');
 const exporter = require('./modules/export');
 const analysis = require('./modules/analysis');
 const { importCsv } = require('./modules/importer');
+const { autoClassify } = require('./modules/themes');
+const { alerts } = require('./modules/alerts');
+const { cohorts } = require('./modules/cohorts');
+
+const content = require('./modules/content');
 
 const wrap = fn => (req, res, next) => { try { res.json(fn(req, res) ?? { ok: true }); } catch (e) { next(e); } };
+const wrapAsync = fn => async (req, res, next) => { try { res.json((await fn(req, res)) ?? { ok: true }); } catch (e) { next(e); } };
 
 function api(db) {
   const r = Router();
@@ -65,6 +71,48 @@ function api(db) {
     }
     return result;
   }));
+
+  // Fase 2 — Biblioteca de información aprobada de Tikaymi
+  r.get('/approved-info', wrap(() => db.prepare('SELECT * FROM approved_info ORDER BY id DESC').all()));
+  r.post('/approved-info', wrap(req => {
+    const b = req.body;
+    if (!C.INFO_TIPOS.includes(b.tipo)) throw Object.assign(new Error(`tipo inválido: ${b.tipo}`), { status: 400 });
+    if (!String(b.titulo ?? '').trim() || !String(b.texto ?? '').trim()) throw Object.assign(new Error('titulo y texto son obligatorios'), { status: 400 });
+    return { id: db.prepare('INSERT INTO approved_info(tipo,titulo,texto,autorizado_publicar,fuente) VALUES(?,?,?,?,?)')
+      .run(b.tipo, b.titulo, b.texto, b.autorizado_publicar ? 1 : 0, b.fuente ?? null).lastInsertRowid };
+  }));
+  r.put('/approved-info/:id', wrap(req => {
+    const r2 = db.prepare('UPDATE approved_info SET autorizado_publicar=? WHERE id=?').run(req.body.autorizado_publicar ? 1 : 0, req.params.id);
+    if (!r2.changes) throw Object.assign(new Error('No existe'), { status: 404 });
+  }));
+  r.delete('/approved-info/:id', wrap(req => db.prepare('DELETE FROM approved_info WHERE id=?').run(req.params.id) && undefined));
+
+  // Fase 2 — Biblioteca de fotografías y videos reales
+  r.get('/assets', wrap(() => db.prepare('SELECT * FROM assets ORDER BY id DESC').all()));
+  r.post('/assets', wrap(req => {
+    const b = req.body;
+    if (!C.ASSET_TIPOS.includes(b.tipo)) throw Object.assign(new Error(`tipo inválido: ${b.tipo}`), { status: 400 });
+    if (!String(b.url ?? '').trim()) throw Object.assign(new Error('url es obligatoria'), { status: 400 });
+    return { id: db.prepare('INSERT INTO assets(tipo,url,descripcion,destino) VALUES(?,?,?,?)')
+      .run(b.tipo, b.url, b.descripcion ?? null, b.destino ?? null).lastInsertRowid };
+  }));
+  r.delete('/assets/:id', wrap(req => db.prepare('DELETE FROM assets WHERE id=?').run(req.params.id) && undefined));
+
+  // Fase 2 — Generación con IA (siempre queda en revisión; aprobación humana manual)
+  r.get('/generated', wrap(req => (req.query.post_id
+    ? db.prepare('SELECT * FROM generated WHERE post_id=? ORDER BY id DESC').all(req.query.post_id)
+    : db.prepare('SELECT * FROM generated ORDER BY id DESC').all())));
+  r.post('/generate', wrapAsync(req => content.generate(db, req.body, {})));
+  r.put('/generated/:id', wrap(req => content.setEstado(db, req.params.id, req.body.estado)));
+
+  // Clasificación automática de temas
+  r.post('/themes/auto', wrap(req => autoClassify(db)));
+
+  // Alertas objetivas
+  r.get('/alerts', wrap(req => alerts(db)));
+
+  // Cohorts de leads
+  r.get('/cohorts', wrap(req => cohorts(db)));
 
   return r;
 }
