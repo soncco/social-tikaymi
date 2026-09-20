@@ -3,7 +3,7 @@
 Base: `docs/Inicial.MD`. Este archivo registra decisiones, avance y TODOs.
 
 ## Inspección previa
-- Repo existente: solo maquetas HTML/JSX estáticas (`Tikaymi - Carrusel *.html`, `shared.jsx`, `styles.css`) y `Tikaymi - Constructor de Carruseles.html` (app autónoma, sin build).
+- Repo existente (ahora en `carruseles-claude-design/`): solo maquetas HTML/JSX estáticas (`Tikaymi - Carrusel *.html`, `shared.jsx`, `styles.css`) y `Tikaymi - Constructor de Carruseles.html` (app autónoma, sin build).
 - **Constructor de carruseles**: se reutiliza tal cual (no se toca ni se duplica). Formato de intercambio:
   ```json
   { "app":"tikaymi-constructor-carruseles", "version":1, "tipo":"producto|informativo",
