@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS leads(
   id INTEGER PRIMARY KEY, post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL, campaign_code TEXT,
   fuente TEXT, estado TEXT NOT NULL DEFAULT 'nuevo', fecha_viaje TEXT, viajeros INTEGER, notas TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS learnings(
   id INTEGER PRIMARY KEY, fecha TEXT DEFAULT CURRENT_TIMESTAMP, texto TEXT NOT NULL, post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL);
 -- Fase 2: biblioteca de información aprobada de Tikaymi (única fuente de verdad para la IA)

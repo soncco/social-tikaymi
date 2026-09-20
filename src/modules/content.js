@@ -1,6 +1,7 @@
 // Módulo de IA y contenido (Inicial.MD §8, §9, §10 y §14 Fase 2).
 // Regla central: la IA solo puede usar información aprobada de Tikaymi. Nunca inventa.
 const C = require('../constants');
+const llm = require('./llm');
 const { validate } = require('./posts');
 const { analyze } = require('./analysis');
 const { carouselExport, LAYOUTS } = require('./export');
@@ -96,41 +97,6 @@ function buildPrompt(db, { post, tipo, idioma }) {
   return { sistema, prompt: L.join('\n') };
 }
 
-async function llamarAnthropic({ sistema, prompt }, fetchImpl) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw err(503, 'Falta ANTHROPIC_API_KEY: configura la clave en el entorno (.env) para usar la generación con IA.');
-  const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
-  const doFetch = fetchImpl || globalThis.fetch;
-
-  let res;
-  try {
-    res = await doFetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model, max_tokens: 4000, system: sistema, messages: [{ role: 'user', content: prompt }] }),
-    });
-  } catch (e) {
-    console.error('[content] error de red al llamar a Anthropic:', e.message);
-    throw err(502, `No se pudo contactar con la API de Anthropic: ${e.message}`);
-  }
-
-  if (!res.ok) {
-    const detalle = await res.text().catch(() => '');
-    console.error(`[content] Anthropic respondió ${res.status}${res.status === 429 ? ' (límite de uso alcanzado)' : ''}: ${detalle.slice(0, 500)}`);
-    throw err(res.status === 429 ? 429 : 502, res.status === 429
-      ? 'Límite de uso de la API de Anthropic alcanzado; reintenta más tarde.'
-      : `La API de Anthropic devolvió ${res.status}.`);
-  }
-
-  const data = await res.json();
-  const texto = (data?.content || []).filter(b => b?.type === 'text').map(b => b.text).join('\n').trim();
-  if (!texto) {
-    console.error('[content] respuesta incompleta de Anthropic:', JSON.stringify(data).slice(0, 500));
-    throw err(502, 'La API de Anthropic devolvió una respuesta sin texto.');
-  }
-  return texto;
-}
-
 const quitarCercas = t => t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
 
 async function generate(db, { post_id, tipo, idioma } = {}, { fetchImpl } = {}) {
@@ -150,7 +116,7 @@ async function generate(db, { post_id, tipo, idioma } = {}, { fetchImpl } = {}) 
   const partes = buildPrompt(db, { post, tipo, idioma: lang });
 
   // (c) Llamada a la API de Anthropic.
-  const texto = await llamarAnthropic(partes, fetchImpl);
+  const texto = (await llm.complete(db, partes, fetchImpl)).texto;
 
   let contenido = texto;
   if (tipo === 'carrusel') {

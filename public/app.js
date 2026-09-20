@@ -5,7 +5,7 @@ let K = {}, tab = 'panel';
 const FAM = { atencion: 'Atención', intencion: 'Intención', negocio: 'Negocio' };
 const CONF = { datos_insuficientes: 'Datos insuficientes', senal_inicial: 'Señal inicial', patron_probable: 'Patrón probable', patron_confirmado: 'Patrón confirmado' };
 const TIPO = { observado: 'Observado', interpretacion: 'Interpretación', recomendacion: 'Recomendación', hipotesis: 'Hipótesis' };
-const TABS = { panel: 'Panel', objetivos: 'Objetivos', posts: 'Publicaciones', importar: 'Importar CSV', leads: 'Leads', aprendizajes: 'Aprendizajes', calendario: 'Calendario', enlaces: 'Enlaces', carrusel: 'Carrusel', info: 'Info aprobada', generar: 'Generar' };
+const TABS = { panel: 'Panel', objetivos: 'Objetivos', posts: 'Publicaciones', importar: 'Importar CSV', leads: 'Leads', aprendizajes: 'Aprendizajes', calendario: 'Calendario', enlaces: 'Enlaces', carrusel: 'Carrusel', info: 'Info aprobada', generar: 'Generar', ia: 'IA' };
 const LBL = k => String(k).replace(/_/g, ' ');
 const opts = (list, sel) => list.map(o => `<option value="${esc(o)}"${o === sel ? ' selected' : ''}>${esc(LBL(o))}</option>`).join('');
 
@@ -185,6 +185,21 @@ async function aprendizajes() {
   $('#f').onsubmit = guard(async e => { e.preventDefault(); const d = formData(e.target); if (d.post_id) d.post_id = Number(d.post_id); await api('/learnings', 'POST', d); toast('Guardado'); go('aprendizajes'); });
 }
 
+/* ---------- Proveedor de IA ---------- */
+async function ia() {
+  const st = await api('/llm');
+  $('#view').innerHTML = `<h2>Proveedor de IA</h2>
+  <p class="mute">Elige qué modelo genera el contenido. Las claves API se configuran solo en el archivo <code>.env</code> (nunca aquí).</p>
+  ${st.proveedores.map(p => `<form class="card form" data-p="${esc(p.id)}">
+    <label class="full"><b>${esc(p.label)}</b> ${p.id === st.activo.provider ? '<span class="badge">ACTIVO</span>' : ''}
+    <small class="mute">${p.configurado ? '✔ clave configurada' : '✘ falta ' + esc(p.clave_env) + ' en .env'}</small></label>
+    <label>Modelo<input name="model" value="${esc(p.modelo)}"></label>
+    <div><button>${p.id === st.activo.provider ? 'Guardar modelo' : 'Usar este proveedor'}</button></div></form>`).join('')}`;
+  document.querySelectorAll('form[data-p]').forEach(f => f.onsubmit = guard(async e => {
+    e.preventDefault(); await api('/llm', 'PUT', { provider: f.dataset.p, model: new FormData(f).get('model') }); toast('Proveedor actualizado'); go('ia');
+  }));
+}
+
 /* ---------- Calendario editorial ---------- */
 const ESTADOS = ['borrador', 'revision', 'aprobado', 'programado', 'publicado', 'analizado'];
 async function calendario() {
@@ -297,6 +312,6 @@ async function generar() {
   });
 }
 
-const views = { panel, objetivos, posts, importar, leads, aprendizajes, calendario, enlaces, carrusel, info, generar };
+const views = { panel, objetivos, posts, importar, leads, aprendizajes, calendario, enlaces, carrusel, info, generar, ia };
 window.go = go;
 api('/constants').then(start).catch(() => showLogin());

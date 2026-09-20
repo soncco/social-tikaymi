@@ -12,7 +12,7 @@ npm start                 # http://localhost:3000
 En `.env` define como mínimo:
 - `ADMIN_PASSWORD`: la contraseña con la que entras.
 - `SESSION_SECRET`: un texto largo y aleatorio (p. ej. `openssl rand -hex 32`).
-- `ANTHROPIC_API_KEY`: solo para generar contenido con IA (ver `docs/CONECTAR-PLATAFORMAS.md`).
+- Una clave de IA (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` o `DEEPSEEK_API_KEY`) para generar contenido. En la pestaña **IA** eliges qué proveedor y modelo se usan; el sistema solo guarda esa elección, nunca las claves (ver `docs/CONECTAR-PLATAFORMAS.md`).
 
 `.env` está en `.gitignore`: nunca se sube al repositorio. Los datos viven en `data/tikaymi.db` (haz copia de ese archivo para respaldar). `npm test` ejecuta las pruebas.
 
@@ -45,7 +45,7 @@ Sigue este orden; el sistema está pensado para que no se genere ni analice nada
 | Síntoma | Causa |
 |---|---|
 | Error al arrancar "Define ADMIN_PASSWORD y SESSION_SECRET" | Falta `.env` |
-| Generar devuelve 503 | Falta `ANTHROPIC_API_KEY` |
+| Generar devuelve 503 | Falta la clave del proveedor activo (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` o `DEEPSEEK_API_KEY`), o cambia de proveedor en la pestaña IA |
 | Generar devuelve 422 | No hay información aprobada y autorizada |
 | Generar devuelve 400 | La publicación no tiene objetivo/audiencia/etapa/CTA/métrica/idioma |
 | El CSV no importa | Columnas no reconocidas; abre un issue con los encabezados reales para ajustar el adaptador |

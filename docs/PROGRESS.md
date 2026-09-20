@@ -24,8 +24,10 @@
 - Fase 3b: pruebas A/B (`abtests.js`, sin likes, misma plataforma), resumen periódico (`GET /api/digest.md`, invocable desde cron), programación manual con iCal (`/api/schedule.ics`), contrato de conectores oficiales en `src/adapters/README.md`.
 - Prueba de humo por API (objetivo → post → lead atribuido → importación → temas → info aprobada → generación → análisis/alertas/cohortes/informe/digest): OK. Encontró un fallo real (adaptador Meta no aceptaba `Title`/`Publish time`), corregido y con test.
 
+- Administrador de proveedores de IA (`src/modules/llm.js`): Anthropic, OpenAI y DeepSeek; activo y modelo en tabla `settings`, claves solo en `.env`; pestaña "IA"; `GET/PUT /api/llm`. Probado con fetch simulado (test/llm.test.js), no contra las APIs reales.
+
 ## TODO (requiere al usuario o credenciales externas)
-- **Datos del usuario**: cargar información aprobada de Tikaymi (servicios, precios, testimonios, fotos) en la pestaña "Info aprobada" y definir `ANTHROPIC_API_KEY` en `.env`. Sin eso la generación responde 422/503 por diseño. La llamada real a la API de Anthropic no se ha probado (solo con fetch simulado).
+- **Datos del usuario**: cargar información aprobada de Tikaymi (servicios, precios, testimonios, fotos) en la pestaña "Info aprobada" y definir la clave de al menos un proveedor de IA en `.env`. Sin eso la generación responde 422/503 por diseño. La llamada real a la API de Anthropic no se ha probado (solo con fetch simulado).
 - **Pruebas en navegador**: la extensión de Chrome no estaba conectada; la UI solo se verificó con `node --check` y llamadas a los endpoints. Falta una revisión visual manual.
 - **CSV reales**: validar los adaptadores Meta/TikTok/YouTube con exportaciones reales.
 - **Conectores oficiales** (Meta/TikTok/YouTube): implementar `fetchStats`/`publish` según `src/adapters/README.md`; requiere aprobación de apps y credenciales de cada plataforma. Incluye actualización automática de estadísticas y publicación automática.

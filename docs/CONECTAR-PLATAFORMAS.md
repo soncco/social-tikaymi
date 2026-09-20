@@ -9,13 +9,22 @@ Es el camino más rápido y no requiere aprobaciones.
 - **YouTube Shorts**: YouTube Studio → Analytics → Modo avanzado → Exportar (CSV), filtrando por Shorts.
 Luego súbelos en la pestaña "Importar CSV" eligiendo la plataforma. Si algún CSV no se reconoce, pásame los encabezados y ajusto el adaptador.
 
-## 1. Anthropic (generación con IA) — lo primero
-1. Entra a https://console.anthropic.com e inicia sesión.
-2. Configura facturación/créditos.
-3. Menú **API Keys → Create Key**, ponle nombre (ej. `tikaymi-lab`).
-4. Copia la clave (solo se muestra una vez) y ponla en `.env`: `ANTHROPIC_API_KEY=...`
-5. Opcional: `ANTHROPIC_MODEL=` para cambiar el modelo (por defecto `claude-sonnet-5`).
-6. Reinicia con `npm start` y prueba en la pestaña **Generar** (necesitas antes información aprobada).
+## 1. Proveedores de IA (generación de contenido)
+Basta con **uno**. Puedes configurar varios y alternar desde la pestaña **IA** sin reiniciar. Las claves van solo en `.env`.
+
+**Anthropic (Claude)**
+1. https://console.anthropic.com → configura facturación/créditos.
+2. **API Keys → Create Key** (se muestra una sola vez) → `ANTHROPIC_API_KEY=...`
+
+**OpenAI**
+1. https://platform.openai.com → configura facturación (Billing).
+2. **API keys → Create new secret key** → `OPENAI_API_KEY=...`
+
+**DeepSeek**
+1. https://platform.deepseek.com → recarga saldo.
+2. **API keys → Create API key** → `DEEPSEEK_API_KEY=...`
+
+Los modelos por defecto (`claude-sonnet-5`, `gpt-4o`, `deepseek-chat`) se pueden cambiar en la pestaña **IA** o con `ANTHROPIC_MODEL` / `OPENAI_MODEL` / `DEEPSEEK_MODEL`; verifica los nombres vigentes en la documentación de cada proveedor. Después reinicia con `npm start` y prueba en **Generar** (necesitas antes información aprobada). Nota: la calidad del resultado (idioma, formato JSON de carruseles, respeto de las reglas de no inventar datos) puede variar entre proveedores; revisa siempre antes de aprobar.
 
 ## 2. Meta (Instagram + Facebook)
 Requisitos previos: cuenta de Instagram **profesional** (Business o Creator) vinculada a una **Página de Facebook**, y acceso de administrador a esa Página.
@@ -46,7 +55,7 @@ Requisitos previos: cuenta de Instagram **profesional** (Business o Creator) vin
 7. Guarda en `.env`: `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`, `YOUTUBE_CHANNEL_ID`.
 
 ## 5. Orden sugerido
-1. Hoy: CSV de las tres plataformas + `ANTHROPIC_API_KEY`.
+1. Hoy: CSV de las tres plataformas + una clave de IA.
 2. Meta (mayor volumen de datos y la más simple en modo desarrollo).
 3. YouTube.
 4. TikTok (la revisión es la más lenta).

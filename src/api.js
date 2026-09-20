@@ -2,6 +2,7 @@ const { Router } = require('express');
 const C = require('./constants');
 const posts = require('./modules/posts');
 const { buildLinks } = require('./modules/attribution');
+const llm = require('./modules/llm');
 const exporter = require('./modules/export');
 const analysis = require('./modules/analysis');
 const { importCsv } = require('./modules/importer');
@@ -58,6 +59,10 @@ function api(db) {
   r.post('/export/carousel', wrap(req => exporter.carouselExport(req.body)));
 
   r.post('/links', wrap(req => buildLinks(req.body)));
+
+  // Administrador de proveedores de IA (las claves solo en .env)
+  r.get('/llm', wrap(() => llm.status(db)));
+  r.put('/llm', wrap(req => llm.configure(db, req.body)));
 
   // Aprendizajes
   r.get('/learnings', wrap(() => db.prepare('SELECT * FROM learnings ORDER BY id DESC').all()));
