@@ -20,10 +20,12 @@
   - Programación **manual** (no publica nada): columna `posts.programado_para` vía migración segura `ALTER TABLE` en `open()`, `PUT /api/posts/:id/schedule` (sólo desde estado `aprobado`, pasa a `programado`; 409 en otro estado), `GET /api/schedule` y `GET /api/schedule.ics` (iCal con recordatorio a -30 min).
   - `src/adapters/README.md`: contrato de los futuros conectores oficiales (`fetchStats`/`publish`, credenciales sólo por env, límites y rate limits). No implementado a propósito.
 
-## TODO (bloqueado o pendiente)
-- **Necesita datos del usuario**: cargar información aprobada de Tikaymi (servicios, precios, testimonios, fotos) vía `/api/approved-info` y `/api/assets`, y definir `ANTHROPIC_API_KEY` en `.env`. Sin ello la generación responde 422/503 (por diseño). La generación con IA real no se ha probado contra la API (solo con fetch simulado).
-- UI aún sin pantallas para: información aprobada/biblioteca de fotos, generación y revisión de contenido, alertas y cohortes (las APIs existen).
-- Fase 3 pendiente: APIs oficiales de Meta/TikTok/YouTube (requieren aprobación de apps y credenciales; contrato ya especificado en `src/adapters/README.md`), publicación automática y actualización automática de estadísticas. Hechas ya sin APIs externas: pruebas A/B, alertas, cohortes, recomendaciones periódicas y programación manual.
-- UI sin pantallas para pruebas A/B, resumen periódico ni calendario programado (las APIs existen; `public/` sin tocar).
-- Validar adaptadores con CSV reales de cada plataforma.
-- Pruebas manuales en navegador de toda la UI (solo se verificó sintaxis y endpoints).
+- UI completa: información aprobada/fotos, generación y revisión, alertas, cohortes, clasificación de temas.
+- Fase 3b: pruebas A/B (`abtests.js`, sin likes, misma plataforma), resumen periódico (`GET /api/digest.md`, invocable desde cron), programación manual con iCal (`/api/schedule.ics`), contrato de conectores oficiales en `src/adapters/README.md`.
+- Prueba de humo por API (objetivo → post → lead atribuido → importación → temas → info aprobada → generación → análisis/alertas/cohortes/informe/digest): OK. Encontró un fallo real (adaptador Meta no aceptaba `Title`/`Publish time`), corregido y con test.
+
+## TODO (requiere al usuario o credenciales externas)
+- **Datos del usuario**: cargar información aprobada de Tikaymi (servicios, precios, testimonios, fotos) en la pestaña "Info aprobada" y definir `ANTHROPIC_API_KEY` en `.env`. Sin eso la generación responde 422/503 por diseño. La llamada real a la API de Anthropic no se ha probado (solo con fetch simulado).
+- **Pruebas en navegador**: la extensión de Chrome no estaba conectada; la UI solo se verificó con `node --check` y llamadas a los endpoints. Falta una revisión visual manual.
+- **CSV reales**: validar los adaptadores Meta/TikTok/YouTube con exportaciones reales.
+- **Conectores oficiales** (Meta/TikTok/YouTube): implementar `fetchStats`/`publish` según `src/adapters/README.md`; requiere aprobación de apps y credenciales de cada plataforma. Incluye actualización automática de estadísticas y publicación automática.

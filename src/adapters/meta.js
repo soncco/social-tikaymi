@@ -14,7 +14,7 @@ function parse(csvText) {
     // Normalize column names to handle both ES and EN exports
     const norm = normalizeHeaders(row);
 
-    if (!norm.external_id || !norm.titulo) return null;
+    if (!norm.external_id) return null;
 
     return {
       external_id: norm.external_id,
@@ -53,7 +53,8 @@ function normalizeHeaders(row) {
   const title = headers.find(h =>
     h.toLowerCase() === 'text' ||
     h.toLowerCase() === 'texto' ||
-    h.toLowerCase().includes('contenido')
+    h.toLowerCase().includes('contenido') ||
+    ['title', 'título', 'titulo', 'description', 'descripción', 'descripcion'].includes(h.toLowerCase())
   );
   result.titulo = title ? (row[title] || '').toString().trim().substring(0, 255) : null;
 
@@ -61,6 +62,8 @@ function normalizeHeaders(row) {
   const date = headers.find(h =>
     h.toLowerCase().includes('fecha') ||
     h.toLowerCase().includes('date') ||
+    h.toLowerCase().includes('publish time') ||
+    h.toLowerCase().includes('hora de publicaci') ||
     h === 'Post Date' || h === 'Fecha de publicación'
   );
   result.fecha = date ? (row[date] || '').toString().trim() : null;

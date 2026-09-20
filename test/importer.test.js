@@ -240,3 +240,12 @@ test('Importer: null metrics stored correctly', () => {
   assert.equal(metrics.plays, null);
   assert.equal(metrics.likes, null);
 });
+
+test('Meta: acepta "Title"/"Publish time" y usa Sin título si falta el título', () => {
+  const meta = require('../src/adapters/meta');
+  const r = meta.parse('Post ID,Title,Publish time,Reach\nx1,Reel Vinicunca,2026-09-01,1200\nx2,,2026-09-02,50\n');
+  assert.equal(r.length, 2);
+  assert.equal(r[0].titulo, 'Reel Vinicunca');
+  assert.equal(r[0].reach, 1200);
+  assert.equal(r[1].titulo, 'Sin título');
+});
