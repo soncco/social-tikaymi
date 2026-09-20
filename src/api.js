@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const C = require('./constants');
 const posts = require('./modules/posts');
+const { buildLinks } = require('./modules/attribution');
 const exporter = require('./modules/export');
 const analysis = require('./modules/analysis');
 const { importCsv } = require('./modules/importer');
@@ -46,6 +47,8 @@ function api(db) {
   // Exportación: informe Markdown y JSON compatible con el constructor de carruseles
   r.get('/report.md', (req, res, next) => { try { res.type('text/markdown').send(exporter.reportMarkdown(db, { periodo: req.query.periodo })); } catch (e) { next(e); } });
   r.post('/export/carousel', wrap(req => exporter.carouselExport(req.body)));
+
+  r.post('/links', wrap(req => buildLinks(req.body)));
 
   // Aprendizajes
   r.get('/learnings', wrap(() => db.prepare('SELECT * FROM learnings ORDER BY id DESC').all()));
