@@ -22,6 +22,18 @@ CREATE TABLE IF NOT EXISTS leads(
   created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS learnings(
   id INTEGER PRIMARY KEY, fecha TEXT DEFAULT CURRENT_TIMESTAMP, texto TEXT NOT NULL, post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL);
+-- Fase 2: biblioteca de información aprobada de Tikaymi (única fuente de verdad para la IA)
+CREATE TABLE IF NOT EXISTS approved_info(
+  id INTEGER PRIMARY KEY, tipo TEXT NOT NULL, titulo TEXT NOT NULL, texto TEXT NOT NULL,
+  autorizado_publicar INTEGER NOT NULL DEFAULT 0, fuente TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS assets(
+  id INTEGER PRIMARY KEY, tipo TEXT NOT NULL, url TEXT NOT NULL, descripcion TEXT, destino TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+-- Todo lo generado nace en 'revision': aprobación humana obligatoria antes de publicar (§8).
+CREATE TABLE IF NOT EXISTS generated(
+  id INTEGER PRIMARY KEY, post_id INTEGER REFERENCES posts(id) ON DELETE CASCADE, tipo TEXT NOT NULL,
+  idioma TEXT NOT NULL, contenido TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'revision',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 `;
 
 function open(file) {
