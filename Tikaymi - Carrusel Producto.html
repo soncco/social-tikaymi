@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Tikaymi — Carrusel producto · Tour 5 días</title>
+<meta name="design_doc_mode" content="canvas" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#FAF6F0;--paper-alt:#F4EDE2;--ink:#1A2E2D;--ink-soft:#4A5958;--ink-mute:#8A8578;--line:#E4DBC9;--line-strong:#C9BFA8;--teal:#0E6462;--teal-deep:#0A4947;--orange:#CD572B;--lime:#A2C357;--serif:"Cormorant Garamond",Georgia,serif;--sans:"Raleway",Helvetica,Arial,sans-serif;--mono:"IBM Plex Mono",monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#8f8b83;font-family:var(--sans);-webkit-font-smoothing:antialiased}
+img{display:block;max-width:100%}
+a{color:var(--teal);text-decoration:none}a:hover{color:var(--orange)}
+.tag{position:absolute;font-family:var(--mono);font-size:26px;letter-spacing:.14em;text-transform:uppercase;color:#fff;opacity:.85}
+.slide{position:absolute;width:1080px;height:1350px;overflow:hidden;background:var(--paper);color:var(--ink);display:flex;flex-direction:column}
+.photo{position:relative;overflow:hidden;background:var(--paper-alt)}
+.photo img{width:100%;height:100%;object-fit:cover}
+.eyebrow{font-family:var(--mono);font-size:21px;letter-spacing:.22em;text-transform:uppercase;color:var(--teal)}
+.eyebrow.on-dark{color:#DCE9CB}
+.h1{font-family:var(--serif);font-weight:400;font-size:100px;line-height:1.0;letter-spacing:-.015em}
+.h2{font-family:var(--serif);font-weight:400;font-size:76px;line-height:1.05;letter-spacing:-.01em}
+.body{font-size:31px;line-height:1.55;color:var(--ink-soft);text-wrap:pretty}
+.body.on-dark{color:rgba(255,255,255,.9)}
+.pad{padding:88px}
+.foot{position:absolute;left:88px;right:88px;bottom:64px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.logo{height:78px;width:auto}
+.count{font-family:var(--mono);font-size:24px;letter-spacing:.16em;color:var(--ink-mute)}
+.count.on-dark{color:rgba(255,255,255,.72)}
+.swipe{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:22px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-mute)}
+.swipe .bar{width:64px;height:1px;background:var(--line-strong)}
+.rule{height:1px;background:var(--line)}
+.overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(10,30,29,.88) 0%,rgba(10,30,29,.46) 44%,rgba(10,30,29,.05) 74%)}
+.ridge{display:block;width:200px;height:26px;overflow:visible}
+.ridge path{fill:none;stroke:var(--lime);stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+.cta{display:inline-flex;align-items:center;background:var(--orange);color:#fff;padding:28px 40px;font-size:30px;font-weight:600;text-decoration:none}
+.cta:hover{background:#B0461F;color:#fff}
+.contact{font-family:var(--mono);font-size:26px;line-height:1.85;letter-spacing:.04em}
+/* producto */
+.meta{display:flex;gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:48px}
+.meta>div{flex:1;padding:32px 0 32px 32px;border-left:1px solid var(--line)}
+.meta>div:first-child{padding-left:0;border-left:none}
+.meta .k{font-family:var(--mono);font-size:19px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute)}
+.meta .v{font-family:var(--serif);font-size:44px;line-height:1.1;margin-top:12px}
+.route{display:flex;flex-direction:column;margin-top:20px}
+.route>div{display:grid;grid-template-columns:132px 1fr;gap:30px;align-items:baseline;padding:34px 0;border-bottom:1px solid var(--line)}
+.route .d{font-family:var(--mono);font-size:21px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal)}
+.route .t{font-family:var(--serif);font-size:44px;line-height:1.15;letter-spacing:-.01em}
+.split{display:grid;grid-template-columns:1fr 1fr;height:100%}
+.list{list-style:none;display:flex;flex-direction:column;gap:26px;margin-top:52px}
+.list li{font-size:28px;line-height:1.42;color:var(--ink-soft);padding-left:44px;position:relative}
+.list li:before{content:"";position:absolute;left:0;top:11px;width:20px;height:20px;border:2px solid var(--lime);border-radius:50%}
+.list.minus li:before{border-color:var(--line-strong);border-radius:0;height:2px;top:19px;border-width:0;background:var(--line-strong)}
+.note{background:var(--paper-alt);padding:40px 44px;border-left:5px solid var(--orange);font-size:26px;line-height:1.5;color:var(--ink-soft)}
+.note b{display:block;font-family:var(--mono);font-size:20px;letter-spacing:.16em;text-transform:uppercase;color:var(--orange);margin-bottom:16px;font-weight:500}
+.cap{position:absolute;left:0;bottom:0;font-family:var(--mono);font-size:19px;letter-spacing:.1em;text-transform:uppercase;color:#fff;background:rgba(10,30,29,.62);padding:12px 18px}
+</style>
+</head>
+<body>
+
+<!-- ============ ENGLISH ============ -->
+<div class="tag" style="left:0;top:-58px">English — Producto · Tour 5 días — 1080 × 1350</div>
+
+<!-- EN 1 · Portada -->
+<div class="slide" data-screen-label="EN 01" style="left:0;top:0">
+  <div class="photo" style="flex:0 0 800px"><img src="https://res.cloudinary.com/tikaymi/image/upload/c_fill,w_1080,h_800,q_auto:best,f_auto/zqkwvwgmi26fsw5mqd4c" alt="Machu Picchu" /><div class="cap">Machu Picchu</div></div>
+  <div style="flex:1;padding:56px 88px 0;position:relative">
+    <div class="eyebrow">Cusco · 5-day package</div>
+    <h1 class="h1" style="margin-top:22px;max-width:900px">Five days, the whole route</h1>
+    <div class="foot">
+      <img class="logo" src="assets/tikaymi-logo.png" alt="Tikaymi Travel" />
+      <div style="display:flex;align-items:center;gap:28px"><div class="swipe"><span>Swipe</span><span class="bar"></span></div><div class="count">1 / 8</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- EN 2 · Ficha del producto -->
+<div class="slide pad" data-screen-label="EN 02" style="left:1180px;top:0;background:var(--paper-alt);justify-content:center">
+  <div class="eyebrow">The package</div>
+  <h2 class="h2" style="margin-top:26px;max-width:860px">City Tour, Sacred Valley, Machu Picchu &amp; Rainbow Mountain</h2>
+  <div class="meta">
+    <div><div class="k">Length</div><div class="v">5 days</div></div>
+    <div><div class="k">Group</div><div class="v">Shared base</div></div>
+    <div><div class="k">Price</div><div class="v">On request</div></div>
+  </div>
+  <p class="body" style="margin-top:48px;max-width:820px">The order matters: an easier first day in the city, then the Valley, Machu Picchu, and the high-altitude route to Vinicunca last.</p>
+  <svg class="ridge" viewBox="0 0 200 26" style="margin-top:60px"><path d="M2 24 L44 8 L62 16 L86 2 L120 20 L148 12 L198 24" /></svg>
+  <div class="foot"><span></span><div class="count">2 / 8</div></div>
+</div>
+
+<!-- EN 3 · Itinerario -->
+<div class="slide" data-screen-label="EN 03" style="left:2360px;top:0">
+  <div class="photo" style="flex:0 0 460px"><img src="https://res.cloudinary.com/tikaymi/image/upload/c_fill,w_1080,h_460,q_auto:best,f_auto/wgpsdzpgp5popgmkoouu" alt="Sacsayhuaman" /><div class="cap">Sacsayhuamán</div></div>
+  <div class="pad" style="flex:1;padding-top:64px;position:relative">
+    <div class="eyebrow">Itinerary</div>
+    <h2 class="h2" style="margin-top:24px;font-size:66px">Day by day</h2>
+    <div class="route">
+      <div><div class="d">Day 01</div><div class="t">Arrival, transfer and Cusco City Tour</div></div>
+      <div><div class="d">Day 02</div><div class="t">Sacred Valley, Písac, Ollantaytambo</div></div>
+      <div><div class="d">Day 03</div><div class="t">Machu Picchu and back to Cusco</div></div>
+    </div>
+    <div class="foot"><span></span><div class="count">3 / 8</div></div>
+  </div>
+</div>
+
+<!-- EN 4 · Machu Picchu a sangre -->
+<div class="slide" data-screen-label="EN 04" style="left:3540px;top:0">
+  <div class="photo" style="position:absolute;inset:0"><img src="https://res.cloudinary.com/tikaymi/image/upload/c_fill,w_1080,h_1350,q_auto:best,f_auto/upemogij3vpdorysxj2s" alt="Machu Picchu" /></div>
+  <div class="overlay"></div>
+  <div class="pad" style="position:relative;margin-top:auto;padding-bottom:170px">
+    <div class="eyebrow on-dark">Day 03</div>
+    <h2 class="h2" style="margin-top:22px;color:#fff;max-width:840px">Machu Picchu, logistics handled</h2>
+    <p class="body on-dark" style="margin-top:30px;max-width:800px">Round-trip train, bus from Aguas Calientes, entry on the available circuit and a professional guide.</p>
+  </div>
+  <div class="foot"><span></span><div class="count on-dark">4 / 8</div></div>
+</div>
+
+<!-- EN 5 · Mitad / mitad -->
+<div class="slide" data-screen-label="EN 05" style="left:4720px;top:0">
+  <div class="split">
+    <div class="photo"><img src="https://res.cloudinary.com/tikaymi/image/upload/c_fill,w_600,h_1350,q_auto:best,f_auto/kzmbwgs4vutu45dxji77" alt="Vinicunca" /><div class="cap">Vinicunca</div></div>
+    <div style="padding:88px 68px;display:flex;flex-direction:column;justify-content:center">
+      <div class="eyebrow">Day 04</div>
+      <h2 class="h2" style="margin-top:22px;font-size:62px">Rainbow Mountain, last</h2>
+      <p class="body" style="margin-top:30px;font-size:28px">An early start at high altitude — which is why it comes after several days in Cusco. Oxygen and first-aid kit on board.</p>
+    </div>
+  </div>
+  <div class="foot"><span></span><div class="count">5 / 8</div></div>
+</div>
+
+<!-- EN 6 · Incluido -->
+<div class="slide pad" data-screen-label="EN 06" style="left:5900px;top:0;justify-content:center">
+  <div class="eyebrow">What's included</div>
+  <h2 class="h2" style="margin-top:26px;max-width:820px">Everything already coordinated</h2>
+  <ul class="list">
+    <li>Airport transfers, both ways</li>
+    <li>Tourist transport and shared professional guiding</li>
+    <li>Machu Picchu: train, bus and entry on the available circuit</li>
+    <li>Buffet lunch in the Sacred Valley; breakfast and lunch at Vinicunca</li>
+    <li>Integral Tourist Ticket: S/ 70 nationals · S/ 130 foreign visitors</li>
+  </ul>
+  <div class="foot"><span></span><div class="count">6 / 8</div></div>
+</div>
+
+<!-- EN 7 · Bueno saberlo -->
+<div class="slide pad" data-screen-label="EN 07" style="left:7080px;top:0;background:var(--paper-alt);justify-content:center">
+  <div class="eyebrow">Good to know</div>
+  <h2 class="h2" style="margin-top:26px;max-width:840px">Two things before you plan dates</h2>
+  <div style="display:flex;flex-direction:column;gap:32px;margin-top:56px">
+    <div class="note"><b>Hotels are optional</b>With the hotel option: 3 nights in Cusco, 1 night in Aguas Calientes, breakfast included.</div>
+    <div class="note"><b>Machu Picchu entry</b>Entries and train times depend on availability and are confirmed before booking.</div>
+  </div>
+  <p class="body" style="margin-top:52px;max-width:820px;font-size:28px">Not included: meals not listed in the itinerary, and horse rental at Vinicunca.</p>
+  <div class="foot"><span></span><div class="count">7 / 8</div></div>
+</div>
+
+<!-- EN 8 · Cierre -->
+<div class="slide pad" data-screen-label="EN 08" style="left:8260px;top:0;background:var(--teal-deep);color:#fff;justify-content:center">
+  <div class="eyebrow on-dark">Cusco · 5 days</div>
+  <h2 class="h2" style="margin-top:30px;color:#fff;max-width:880px">Send us your dates and we'll check availability</h2>
+  <p class="body on-dark" style="margin-top:32px;max-width:810px">Price on request — it depends on hotels, group size and the season. Deicy answers on WhatsApp.</p>
+  <a class="cta" href="https://tikaymi.com/tour/tour-5-dias-city-tour-valle-machupicchu-vinincunca/" style="margin-top:58px;align-self:flex-start">Plan your trip with us</a>
+  <div class="rule" style="margin:58px 0 40px;background:rgba(255,255,255,.18)"></div>
+  <div class="contact" style="color:rgba(255,255,255,.92)">tikaymi.com/tours<br />WhatsApp: +51 984 387 227</div>
+  <div class="foot">
+    <img class="logo" src="assets/tikaymi-logo.png" alt="Tikaymi Travel" style="background:var(--paper);padding:16px 22px" />
+    <div class="count on-dark">8 / 8</div>
+  </div>
+</div>
+
+<!-- ============ ESPAÑOL ============ -->
+<div class="tag" style="left:0;top:1502px">Español — Producto · Tour 5 días — 1080 × 1350</div>
+
+<!-- ES 1 -->
+<div class="slide" data-screen-label="ES 01" style="left:0;top:1560px">
+  <div class="photo" style="flex:0 0 800px"><img src="https://res.cloudinary.com/tikaymi/image/upload/c_fill,w_1080,h_800,q_auto:best,f_auto/zqkwvwgmi26fsw5mqd4c" alt="Machu Picchu" /><div class="cap">Machu Picchu</div></div>
+  <div style="flex:1;padding:56px 88px 0;position:relative">
+    <div class="eyebrow">Cusco · Paquete de 5 días</div>
+    <h1 class="h1" style="margin-top:22px;max-width:920px">Cinco días, la ruta completa</h1>
+    <div class="foot">
+      <img class="logo" src="assets/tikaymi-logo.png" alt="Tikaymi Travel" />
+      <div style="display:flex;align-items:center;gap:28px"><div class="swipe"><span>Desliza</span><span class="bar"></span></div><div class="count">1 / 8</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ES 2 -->
+<div class="slide pad" data-screen-label="ES 02" style="left:1180px;top:1560px;background:var(--paper-alt);justify-content:center">
+  <div class="eyebrow">El paquete</div>
+  <h2 class="h2" style="margin-top:26px;max-width:880px">City Tour, Valle Sagrado, Machu Picchu y Montaña de 7 Colores</h2>
+  <div class="meta">
+    <div><div class="k">Duración</div><div class="v">5 días</div></div>
+    <div><div class="k">Servicio</div><div class="v">Base compartido</div></div>
+    <div><div class="k">Precio</div><div class="v">A consultar</div></div>
+  </div>
+  <p class="body" style="margin-top:48px;max-width:840px">El orden importa: un primer día más suave en la ciudad, luego el Valle, Machu Picchu y al final la ruta de altura a Vinicunca.</p>
+  <svg class="ridge" viewBox="0 0 200 26" style="margin-top:60px"><path d="M2 24 L44 8 L62 16 L86 2 L120 20 L148 12 L198 24" /></svg>
+  <div class="foot"><span></span><div class="count">2 / 8</div></div>
+</div>
+
+<!-- ES 3 -->
+<div class="slide" data-screen-label="ES 03" style="left:2360px;top:1560px">
+  <div class="photo" style="flex:0 0 460px"><img src="https://res.cloudinary.com/tikaymi/image/upload/c_fill,w_1080,h_460,q_auto:best,f_auto/wgpsdzpgp5popgmkoouu" alt="Sacsayhuamán" /><div class="cap">Sacsayhuamán</div></div>
+  <div class="pad" style="flex:1;padding-top:64px;position:relative">
+    <div class="eyebrow">Itinerario</div>
+    <h2 class="h2" style="margin-top:24px;font-size:66px">Día por día</h2>
+    <div class="route">
+      <div><div class="d">Día 01</div><div class="t">Llegada, traslado y City Tour Cusco</div></div>
+      <div><div class="d">Día 02</div><div class="t">Valle Sagrado, Písac y Ollantaytambo</div></div>
+      <div><div class="d">Día 03</div><div class="t">Machu Picchu y retorno a Cusco</div></div>
+    </div>
+    <div class="foot"><span></span><div class="count">3 / 8</div></div>
+  </div>
+</div>
+
+<!-- ES 4 -->
+<div class="slide" data-screen-label="ES 04" style="left:3540px;top:1560px">
+  <div class="photo" style="position:absolute;inset:0"><img src="https://res.cloudinary.com/tikaymi/image/upload/c_fill,w_1080,h_1350,q_auto:best,f_auto/upemogij3vpdorysxj2s" alt="Machu Picchu" /></div>
+  <div class="overlay"></div>
+  <div class="pad" style="position:relative;margin-top:auto;padding-bottom:170px">
+    <div class="eyebrow on-dark">Día 03</div>
+    <h2 class="h2" style="margin-top:22px;color:#fff;max-width:860px">Machu Picchu, con la logística resuelta</h2>
+    <p class="body on-dark" style="margin-top:30px;max-width:810px">Tren ida y vuelta, bus desde Aguas Calientes, ingreso según circuito disponible y guiado profesional.</p>
+  </div>
+  <div class="foot"><span></span><div class="count on-dark">4 / 8</div></div>
+</div>
+
+<!-- ES 5 -->
+<div class="slide" data-screen-label="ES 05" style="left:4720px;top:1560px">
+  <div class="split">
+    <div class="photo"><img src="https://res.cloudinary.com/tikaymi/image/upload/c_fill,w_600,h_1350,q_auto:best,f_auto/kzmbwgs4vutu45dxji77" alt="Vinicunca" /><div class="cap">Vinicunca</div></div>
+    <div style="padding:88px 68px;display:flex;flex-direction:column;justify-content:center">
+      <div class="eyebrow">Día 04</div>
+      <h2 class="h2" style="margin-top:22px;font-size:62px">Vinicunca, al final</h2>
+      <p class="body" style="margin-top:30px;font-size:28px">Salida de madrugada y ruta de altura: por eso va después de varios días en Cusco. Con balón de oxígeno y botiquín.</p>
+    </div>
+  </div>
+  <div class="foot"><span></span><div class="count">5 / 8</div></div>
+</div>
+
+<!-- ES 6 -->
+<div class="slide pad" data-screen-label="ES 06" style="left:5900px;top:1560px;justify-content:center">
+  <div class="eyebrow">Incluido</div>
+  <h2 class="h2" style="margin-top:26px;max-width:840px">Todo coordinado desde antes</h2>
+  <ul class="list">
+    <li>Traslado ida y vuelta al aeropuerto</li>
+    <li>Transporte turístico y guiado profesional compartido</li>
+    <li>Machu Picchu: tren, bus e ingreso según circuito disponible</li>
+    <li>Almuerzo buffet en el Valle Sagrado; desayuno y almuerzo en Vinicunca</li>
+    <li>Boleto Turístico integral: S/ 70 nacional · S/ 130 extranjero</li>
+  </ul>
+  <div class="foot"><span></span><div class="count">6 / 8</div></div>
+</div>
+
+<!-- ES 7 -->
+<div class="slide pad" data-screen-label="ES 07" style="left:7080px;top:1560px;background:var(--paper-alt);justify-content:center">
+  <div class="eyebrow">Bueno saberlo</div>
+  <h2 class="h2" style="margin-top:26px;max-width:860px">Dos cosas antes de elegir fechas</h2>
+  <div style="display:flex;flex-direction:column;gap:32px;margin-top:56px">
+    <div class="note"><b>El hotel es opcional</b>Con la opción hotel: 3 noches en Cusco, 1 noche en Aguas Calientes y desayunos incluidos.</div>
+    <div class="note"><b>Ingreso a Machu Picchu</b>Los ingresos y horarios de tren dependen de disponibilidad y se confirman antes de reservar.</div>
+  </div>
+  <p class="body" style="margin-top:52px;max-width:840px;font-size:28px">No incluye: alimentación no mencionada en el itinerario y alquiler de caballos en Vinicunca.</p>
+  <div class="foot"><span></span><div class="count">7 / 8</div></div>
+</div>
+
+<!-- ES 8 -->
+<div class="slide pad" data-screen-label="ES 08" style="left:8260px;top:1560px;background:var(--teal-deep);color:#fff;justify-content:center">
+  <div class="eyebrow on-dark">Cusco · 5 días</div>
+  <h2 class="h2" style="margin-top:30px;color:#fff;max-width:900px">Escríbenos tus fechas y revisamos disponibilidad</h2>
+  <p class="body on-dark" style="margin-top:32px;max-width:820px">El precio es a consultar: depende del hotel, la cantidad de viajeros y la temporada. Deicy responde por WhatsApp.</p>
+  <a class="cta" href="https://tikaymi.com/tour/tour-5-dias-city-tour-valle-machupicchu-vinincunca/" style="margin-top:58px;align-self:flex-start">Planifica tu viaje con nosotros</a>
+  <div class="rule" style="margin:58px 0 40px;background:rgba(255,255,255,.18)"></div>
+  <div class="contact" style="color:rgba(255,255,255,.92)">tikaymi.com/tours<br />WhatsApp: +51 984 387 227</div>
+  <div class="foot">
+    <img class="logo" src="assets/tikaymi-logo.png" alt="Tikaymi Travel" style="background:var(--paper);padding:16px 22px" />
+    <div class="count on-dark">8 / 8</div>
+  </div>
+</div>
+
+</body>
+</html>

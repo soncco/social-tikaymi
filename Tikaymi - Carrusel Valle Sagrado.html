@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Tikaymi — Carrusel Valle Sagrado</title>
+<meta name="design_doc_mode" content="canvas" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#FAF6F0;--paper-alt:#F4EDE2;--ink:#1A2E2D;--ink-soft:#4A5958;--ink-mute:#8A8578;--line:#E4DBC9;--teal:#0E6462;--teal-deep:#0A4947;--orange:#CD572B;--lime:#A2C357;--serif:"Cormorant Garamond",Georgia,serif;--sans:"Raleway",Helvetica,Arial,sans-serif;--mono:"IBM Plex Mono",monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#8f8b83;font-family:var(--sans);-webkit-font-smoothing:antialiased}
+img{display:block;max-width:100%}
+a{color:var(--teal)}a:hover{color:var(--orange)}
+.tag{position:absolute;font-family:var(--mono);font-size:26px;letter-spacing:.14em;text-transform:uppercase;color:#fff;opacity:.85}
+.slide{position:absolute;width:1080px;height:1350px;overflow:hidden;background:var(--paper);color:var(--ink);display:flex;flex-direction:column}
+/* photo placeholder */
+.ph{position:relative;background:repeating-linear-gradient(135deg,#E7DECD 0 14px,#EFE7D8 14px 28px);overflow:hidden}
+.ph-note{position:absolute;inset:auto 40px 40px 40px;font-family:var(--mono);font-size:19px;line-height:1.5;letter-spacing:.02em;color:#5d5647;background:rgba(250,246,240,.92);padding:16px 18px;border-left:3px solid var(--orange)}
+.ph-note b{font-weight:500;letter-spacing:.1em;display:block;margin-bottom:6px;color:var(--orange)}
+/* type */
+.eyebrow{font-family:var(--mono);font-size:21px;letter-spacing:.22em;text-transform:uppercase;color:var(--teal)}
+.eyebrow.on-dark{color:#DCE9CB}
+.h1{font-family:var(--serif);font-weight:400;font-size:104px;line-height:1.0;letter-spacing:-.015em}
+.h2{font-family:var(--serif);font-weight:400;font-size:80px;line-height:1.04;letter-spacing:-.01em}
+.body{font-size:31px;line-height:1.55;color:var(--ink-soft);font-weight:400;text-wrap:pretty}
+.body.on-dark{color:rgba(255,255,255,.9)}
+.num{font-family:var(--serif);font-weight:400;font-size:190px;line-height:.85;letter-spacing:-.03em;color:var(--teal)}
+/* furniture */
+.pad{padding:88px}
+.foot{position:absolute;left:88px;right:88px;bottom:64px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.logo{height:78px;width:auto}
+.count{font-family:var(--mono);font-size:24px;letter-spacing:.16em;color:var(--ink-mute)}
+.count.on-dark{color:rgba(255,255,255,.72)}
+.swipe{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:22px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-mute)}
+.swipe .bar{width:64px;height:1px;background:var(--line-strong,#C9BFA8)}
+.ridge{display:block;width:200px;height:26px;overflow:visible}
+.ridge path{fill:none;stroke:var(--lime);stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+.rule{height:1px;background:var(--line)}
+.overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(10,30,29,.86) 0%,rgba(10,30,29,.45) 42%,rgba(10,30,29,.06) 72%)}
+.chip{display:inline-block;background:var(--paper);padding:14px 22px;font-family:var(--mono);font-size:21px;letter-spacing:.16em;text-transform:uppercase;color:var(--teal-deep)}
+.cta{display:inline-flex;align-items:center;gap:18px;background:var(--orange);color:#fff;padding:28px 40px;font-size:30px;font-weight:600;letter-spacing:.01em;text-decoration:none}
+.cta:hover{background:#B0461F;color:#fff}
+.contact{font-family:var(--mono);font-size:26px;line-height:1.85;letter-spacing:.04em;color:var(--ink-soft)}
+.contact span{color:var(--ink-mute)}
+</style>
+</head>
+<body>
+
+<!-- ============ ENGLISH ============ -->
+<div class="tag" style="left:0;top:-58px">English — 1080 × 1350</div>
+
+<!-- EN 1 · Cover -->
+<div class="slide" data-screen-label="EN 01" style="left:0;top:0">
+  <div class="ph" style="flex:0 0 830px">
+    <div class="ph-note"><b>Fotografía necesaria</b>Valle Sagrado visto desde el mirador de Taray — horizontal, luz de mañana, horizonte alineado a un tercio, sin gente en primer plano.</div>
+  </div>
+  <div style="flex:1;padding:64px 88px 0;position:relative">
+    <div class="eyebrow">Sacred Valley · Cusco</div>
+    <h1 class="h1" style="margin-top:26px;max-width:840px">Three days in the Sacred Valley</h1>
+    <div class="foot">
+      <img class="logo" src="assets/tikaymi-logo.png" alt="Tikaymi Travel" />
+      <div style="display:flex;align-items:center;gap:28px"><div class="swipe"><span>Swipe</span><span class="bar"></span></div><div class="count">1 / 6</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- EN 2 · Data highlight -->
+<div class="slide pad" data-screen-label="EN 02" style="left:1180px;top:0;background:var(--paper-alt);justify-content:center">
+  <div class="eyebrow">Why we start here</div>
+  <div style="display:flex;align-items:flex-end;gap:40px;margin-top:60px">
+    <div><div class="num">2,800</div><div class="eyebrow" style="margin-top:22px">m · Sacred Valley</div></div>
+    <div style="opacity:.42"><div class="num" style="font-size:120px;color:var(--ink-soft)">3,400</div><div class="eyebrow" style="margin-top:18px;color:var(--ink-soft)">m · Cusco city</div></div>
+  </div>
+  <div class="rule" style="margin:64px 0 56px"></div>
+  <h2 class="h2" style="max-width:820px">The Valley sits lower than the city</h2>
+  <p class="body" style="margin-top:38px;max-width:760px">Sleeping in the Sacred Valley on your first nights makes the altitude much easier. We leave Cusco city for later in the trip.</p>
+  <svg class="ridge" viewBox="0 0 200 26" style="margin-top:72px"><path d="M2 24 L44 8 L62 16 L86 2 L120 20 L148 12 L198 24" /></svg>
+  <div class="foot"><span></span><div class="count">2 / 6</div></div>
+</div>
+
+<!-- EN 3 · Half photo / half text -->
+<div class="slide" data-screen-label="EN 03" style="left:2360px;top:0">
+  <div class="ph" style="flex:0 0 640px">
+    <div class="ph-note"><b>Fotografía necesaria</b>Salineras de Maras — horizontal, plano medio de las pozas, sin cortar el paisaje del fondo, colores naturales.</div>
+  </div>
+  <div style="flex:1;padding:72px 88px 0;position:relative">
+    <div class="eyebrow">Day 01</div>
+    <h2 class="h2" style="margin-top:26px;max-width:840px">Chinchero, Moray &amp; Maras</h2>
+    <p class="body" style="margin-top:36px;max-width:800px">Weaving in Chinchero, the circular terraces of Moray, then the salt pans of Maras. A slow morning, and back before sunset.</p>
+    <div class="foot"><span></span><div class="count">3 / 6</div></div>
+  </div>
+</div>
+
+<!-- EN 4 · Photo top / content bottom -->
+<div class="slide" data-screen-label="EN 04" style="left:3540px;top:0">
+  <div class="ph" style="flex:0 0 520px">
+    <div class="ph-note"><b>Fotografía necesaria</b>Andenes de Písac temprano en la mañana — horizontal, vista amplia del sitio, horizonte recto, sin grupos de turistas.</div>
+  </div>
+  <div style="flex:1;padding:72px 88px 0;position:relative;background:var(--paper)">
+    <div class="eyebrow">Day 02</div>
+    <h2 class="h2" style="margin-top:26px">Písac &amp; Urubamba</h2>
+    <p class="body" style="margin-top:36px;max-width:790px">The ruins first, early, before the buses arrive. Then the village market, lunch in Urubamba, and a free afternoon.</p>
+    <div style="display:flex;gap:16px;margin-top:52px"><span class="chip" style="background:#fff">Early start</span><span class="chip" style="background:#fff">Free afternoon</span></div>
+    <div class="foot"><span></span><div class="count">4 / 6</div></div>
+  </div>
+</div>
+
+<!-- EN 5 · Full bleed + overlay -->
+<div class="slide" data-screen-label="EN 05" style="left:4720px;top:0">
+  <div class="ph" style="position:absolute;inset:0">
+    <div class="ph-note" style="inset:40px 40px auto 40px"><b>Fotografía necesaria</b>Ollantaytambo — vertical, calle inca o andenes con el pueblo al fondo, luz de tarde, espacio libre en la mitad inferior.</div>
+  </div>
+  <div class="overlay"></div>
+  <div class="pad" style="position:relative;margin-top:auto;padding-bottom:170px">
+    <div class="eyebrow on-dark">Day 03</div>
+    <h2 class="h2" style="margin-top:26px;color:#fff;max-width:820px">Ollantaytambo, then the train</h2>
+    <p class="body on-dark" style="margin-top:34px;max-width:790px">The last Inca town still lived in. Walk the terraces, then take the afternoon train onward to Machu Picchu.</p>
+  </div>
+  <div class="foot"><span></span><div class="count on-dark">5 / 6</div></div>
+</div>
+
+<!-- EN 6 · Closing -->
+<div class="slide pad" data-screen-label="EN 06" style="left:5900px;top:0;background:var(--teal-deep);color:#fff;justify-content:center">
+  <div class="eyebrow on-dark">Sacred Valley · 3 days</div>
+  <h2 class="h2" style="margin-top:34px;color:#fff;max-width:860px">Made for the way you travel</h2>
+  <p class="body on-dark" style="margin-top:36px;max-width:790px">The same three days, arranged around your pace, your interests and the people travelling with you.</p>
+  <a class="cta" href="https://tikaymi.com" style="margin-top:64px;align-self:flex-start;color:#fff">Plan your trip with us</a>
+  <div class="rule" style="margin:64px 0 44px;background:rgba(255,255,255,.18)"></div>
+  <div class="contact" style="color:rgba(255,255,255,.92)">tikaymi.com<br />WhatsApp: +51 984 387 227</div>
+  <div class="foot">
+    <img class="logo" src="assets/tikaymi-logo.png" alt="Tikaymi Travel" style="background:var(--paper);padding:16px 22px" />
+    <div class="count on-dark">6 / 6</div>
+  </div>
+</div>
+
+<!-- ============ ESPAÑOL ============ -->
+<div class="tag" style="left:0;top:1502px">Español — 1080 × 1350</div>
+
+<!-- ES 1 · Portada -->
+<div class="slide" data-screen-label="ES 01" style="left:0;top:1560px">
+  <div class="ph" style="flex:0 0 830px">
+    <div class="ph-note"><b>Fotografía necesaria</b>Valle Sagrado visto desde el mirador de Taray — horizontal, luz de mañana, horizonte alineado a un tercio, sin gente en primer plano.</div>
+  </div>
+  <div style="flex:1;padding:64px 88px 0;position:relative">
+    <div class="eyebrow">Valle Sagrado · Cusco</div>
+    <h1 class="h1" style="margin-top:26px;max-width:860px">Tres días en el Valle Sagrado</h1>
+    <div class="foot">
+      <img class="logo" src="assets/tikaymi-logo.png" alt="Tikaymi Travel" />
+      <div style="display:flex;align-items:center;gap:28px"><div class="swipe"><span>Desliza</span><span class="bar"></span></div><div class="count">1 / 6</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ES 2 -->
+<div class="slide pad" data-screen-label="ES 02" style="left:1180px;top:1560px;background:var(--paper-alt);justify-content:center">
+  <div class="eyebrow">Por qué empezamos aquí</div>
+  <div style="display:flex;align-items:flex-end;gap:40px;margin-top:60px">
+    <div><div class="num">2 800</div><div class="eyebrow" style="margin-top:22px">m · Valle Sagrado</div></div>
+    <div style="opacity:.42"><div class="num" style="font-size:120px;color:var(--ink-soft)">3 400</div><div class="eyebrow" style="margin-top:18px;color:var(--ink-soft)">m · Ciudad del Cusco</div></div>
+  </div>
+  <div class="rule" style="margin:64px 0 56px"></div>
+  <h2 class="h2" style="max-width:840px">El Valle está más bajo que la ciudad</h2>
+  <p class="body" style="margin-top:38px;max-width:780px">Dormir las primeras noches en el Valle Sagrado hace la altura mucho más llevadera. Dejamos la ciudad del Cusco para después.</p>
+  <svg class="ridge" viewBox="0 0 200 26" style="margin-top:72px"><path d="M2 24 L44 8 L62 16 L86 2 L120 20 L148 12 L198 24" /></svg>
+  <div class="foot"><span></span><div class="count">2 / 6</div></div>
+</div>
+
+<!-- ES 3 -->
+<div class="slide" data-screen-label="ES 03" style="left:2360px;top:1560px">
+  <div class="ph" style="flex:0 0 640px">
+    <div class="ph-note"><b>Fotografía necesaria</b>Salineras de Maras — horizontal, plano medio de las pozas, sin cortar el paisaje del fondo, colores naturales.</div>
+  </div>
+  <div style="flex:1;padding:72px 88px 0;position:relative">
+    <div class="eyebrow">Día 01</div>
+    <h2 class="h2" style="margin-top:26px;max-width:860px">Chinchero, Moray y Maras</h2>
+    <p class="body" style="margin-top:36px;max-width:810px">Los telares de Chinchero, los andenes circulares de Moray y las salineras de Maras. Una mañana sin prisa, de vuelta antes del atardecer.</p>
+    <div class="foot"><span></span><div class="count">3 / 6</div></div>
+  </div>
+</div>
+
+<!-- ES 4 -->
+<div class="slide" data-screen-label="ES 04" style="left:3540px;top:1560px">
+  <div class="ph" style="flex:0 0 520px">
+    <div class="ph-note"><b>Fotografía necesaria</b>Andenes de Písac temprano en la mañana — horizontal, vista amplia del sitio, horizonte recto, sin grupos de turistas.</div>
+  </div>
+  <div style="flex:1;padding:72px 88px 0;position:relative">
+    <div class="eyebrow">Día 02</div>
+    <h2 class="h2" style="margin-top:26px">Písac y Urubamba</h2>
+    <p class="body" style="margin-top:36px;max-width:800px">Primero el sitio arqueológico, temprano, antes de los buses. Luego el mercado del pueblo, almuerzo en Urubamba y tarde libre.</p>
+    <div style="display:flex;gap:16px;margin-top:52px"><span class="chip" style="background:#fff">Salida temprano</span><span class="chip" style="background:#fff">Tarde libre</span></div>
+    <div class="foot"><span></span><div class="count">4 / 6</div></div>
+  </div>
+</div>
+
+<!-- ES 5 -->
+<div class="slide" data-screen-label="ES 05" style="left:4720px;top:1560px">
+  <div class="ph" style="position:absolute;inset:0">
+    <div class="ph-note" style="inset:40px 40px auto 40px"><b>Fotografía necesaria</b>Ollantaytambo — vertical, calle inca o andenes con el pueblo al fondo, luz de tarde, espacio libre en la mitad inferior.</div>
+  </div>
+  <div class="overlay"></div>
+  <div class="pad" style="position:relative;margin-top:auto;padding-bottom:170px">
+    <div class="eyebrow on-dark">Día 03</div>
+    <h2 class="h2" style="margin-top:26px;color:#fff;max-width:840px">Ollantaytambo y el tren</h2>
+    <p class="body on-dark" style="margin-top:34px;max-width:800px">El último pueblo inca todavía habitado. Recorrer los andenes y tomar el tren de la tarde hacia Machu Picchu.</p>
+  </div>
+  <div class="foot"><span></span><div class="count on-dark">5 / 6</div></div>
+</div>
+
+<!-- ES 6 -->
+<div class="slide pad" data-screen-label="ES 06" style="left:5900px;top:1560px;background:var(--teal-deep);color:#fff;justify-content:center">
+  <div class="eyebrow on-dark">Valle Sagrado · 3 días</div>
+  <h2 class="h2" style="margin-top:34px;color:#fff;max-width:880px">Hecho a la medida de tu viaje</h2>
+  <p class="body on-dark" style="margin-top:36px;max-width:800px">Los mismos tres días, organizados según tu ritmo, tus intereses y las personas que viajan contigo.</p>
+  <a class="cta" href="https://tikaymi.com" style="margin-top:64px;align-self:flex-start;color:#fff">Planifica tu viaje con nosotros</a>
+  <div class="rule" style="margin:64px 0 44px;background:rgba(255,255,255,.18)"></div>
+  <div class="contact" style="color:rgba(255,255,255,.92)">tikaymi.com<br />WhatsApp: +51 984 387 227</div>
+  <div class="foot">
+    <img class="logo" src="assets/tikaymi-logo.png" alt="Tikaymi Travel" style="background:var(--paper);padding:16px 22px" />
+    <div class="count on-dark">6 / 6</div>
+  </div>
+</div>
+
+</body>
+</html>

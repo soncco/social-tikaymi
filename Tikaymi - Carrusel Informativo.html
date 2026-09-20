@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Tikaymi — Carrusel informativo</title>
+<meta name="design_doc_mode" content="canvas" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#FAF6F0;--paper-alt:#F4EDE2;--ink:#1A2E2D;--ink-soft:#4A5958;--ink-mute:#8A8578;--line:#E4DBC9;--line-strong:#C9BFA8;--teal:#0E6462;--teal-deep:#0A4947;--orange:#CD572B;--lime:#A2C357;--serif:"Cormorant Garamond",Georgia,serif;--sans:"Raleway",Helvetica,Arial,sans-serif;--mono:"IBM Plex Mono",monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#8f8b83;font-family:var(--sans);-webkit-font-smoothing:antialiased}
+img{display:block;max-width:100%}
+a{color:var(--teal);text-decoration:none}a:hover{color:var(--orange)}
+.tag{position:absolute;font-family:var(--mono);font-size:26px;letter-spacing:.14em;text-transform:uppercase;color:#fff;opacity:.85}
+.slide{position:absolute;width:1080px;height:1350px;overflow:hidden;background:var(--paper);color:var(--ink);display:flex;flex-direction:column}
+.ph{position:relative;background:repeating-linear-gradient(135deg,#E7DECD 0 14px,#EFE7D8 14px 28px);overflow:hidden}
+.ph-note{position:absolute;inset:auto 40px 40px 40px;font-family:var(--mono);font-size:19px;line-height:1.5;color:#5d5647;background:rgba(250,246,240,.92);padding:16px 18px;border-left:3px solid var(--orange)}
+.ph-note b{font-weight:500;letter-spacing:.1em;display:block;margin-bottom:6px;color:var(--orange)}
+.eyebrow{font-family:var(--mono);font-size:21px;letter-spacing:.22em;text-transform:uppercase;color:var(--teal)}
+.eyebrow.on-dark{color:#DCE9CB}
+.h1{font-family:var(--serif);font-weight:400;font-size:100px;line-height:1.0;letter-spacing:-.015em}
+.h2{font-family:var(--serif);font-weight:400;font-size:78px;line-height:1.05;letter-spacing:-.01em}
+.body{font-size:31px;line-height:1.55;color:var(--ink-soft);text-wrap:pretty}
+.body.on-dark{color:rgba(255,255,255,.9)}
+.pad{padding:88px}
+.foot{position:absolute;left:88px;right:88px;bottom:64px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.logo{height:78px;width:auto}
+.count{font-family:var(--mono);font-size:24px;letter-spacing:.16em;color:var(--ink-mute)}
+.count.on-dark{color:rgba(255,255,255,.72)}
+.swipe{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:22px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-mute)}
+.swipe .bar{width:64px;height:1px;background:var(--line-strong)}
+.rule{height:1px;background:var(--line)}
+.overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(10,30,29,.86) 0%,rgba(10,30,29,.45) 42%,rgba(10,30,29,.06) 72%)}
+.ridge{display:block;width:200px;height:26px;overflow:visible}
+.ridge path{fill:none;stroke:var(--lime);stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+.cta{display:inline-flex;align-items:center;background:var(--orange);color:#fff;padding:28px 40px;font-size:30px;font-weight:600;text-decoration:none}
+.cta:hover{background:#B0461F;color:#fff}
+.contact{font-family:var(--mono);font-size:26px;line-height:1.85;letter-spacing:.04em}
+/* informativo: pasos numerados */
+.steps{display:flex;flex-direction:column;gap:0;margin-top:26px}
+.step{display:grid;grid-template-columns:118px 1fr;gap:34px;align-items:baseline;padding:40px 0;border-top:1px solid var(--line)}
+.step:last-child{border-bottom:1px solid var(--line)}
+.step .n{font-family:var(--serif);font-size:78px;line-height:.9;color:var(--lime)}
+.step h3{font-family:var(--serif);font-weight:500;font-size:46px;line-height:1.1;letter-spacing:-.01em}
+.step p{font-size:27px;line-height:1.5;color:var(--ink-soft);margin-top:12px}
+/* informativo: dos columnas sí / no */
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:56px;border-top:1px solid var(--line)}
+.col{padding:46px 44px 46px 0}
+.col+.col{padding-left:44px;border-left:1px solid var(--line)}
+.col h4{font-family:var(--mono);font-size:21px;letter-spacing:.18em;text-transform:uppercase;margin-bottom:30px}
+.col ul{list-style:none;display:flex;flex-direction:column;gap:22px}
+.col li{font-size:28px;line-height:1.4;color:var(--ink-soft);padding-left:34px;position:relative}
+.col li:before{content:"";position:absolute;left:0;top:14px;width:16px;height:2px;background:var(--line-strong)}
+.col.yes h4{color:var(--teal)}.col.yes li:before{background:var(--lime);height:3px}
+.col.no h4{color:var(--orange)}.col.no li:before{background:var(--orange)}
+/* informativo: dato / cifra */
+.factrow{display:grid;grid-template-columns:1fr 1fr;gap:56px;margin-top:56px}
+.fact{border-top:2px solid var(--teal);padding-top:26px}
+.fact .v{font-family:var(--serif);font-size:104px;line-height:.9;color:var(--teal)}
+.fact .k{font-family:var(--mono);font-size:20px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);margin-top:18px;line-height:1.5}
+/* informativo: panel de recomendación */
+.panel{background:var(--paper-alt);padding:56px;border-left:5px solid var(--lime)}
+.panel .k{font-family:var(--mono);font-size:21px;letter-spacing:.18em;text-transform:uppercase;color:var(--teal);margin-bottom:24px}
+.panel p{font-family:var(--serif);font-size:48px;line-height:1.25;letter-spacing:-.01em}
+/* informativo: pregunta / respuesta */
+.qa{display:flex;flex-direction:column;gap:44px;margin-top:56px}
+.qa .q{font-family:var(--serif);font-size:56px;line-height:1.15;letter-spacing:-.01em}
+.qa .a{font-size:29px;line-height:1.55;color:var(--ink-soft);padding-top:26px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+
+<!-- ============ ENGLISH ============ -->
+<div class="tag" style="left:0;top:-58px">English — Informativo — 1080 × 1350</div>
+
+<!-- EN 1 · Portada -->
+<div class="slide" data-screen-label="EN 01" style="left:0;top:0">
+  <div class="ph" style="flex:0 0 760px">
+    <div class="ph-note"><b>Fotografía necesaria</b>Vista de la ciudad del Cusco desde un mirador — horizontal, luz de tarde, tejados y montañas al fondo, sin filtros intensos.</div>
+  </div>
+  <div style="flex:1;padding:60px 88px 0;position:relative">
+    <div class="eyebrow">Arriving in Cusco · 3,400 m</div>
+    <h1 class="h1" style="margin-top:24px;max-width:880px">Your first 48 hours at altitude</h1>
+    <div class="foot">
+      <img class="logo" src="assets/tikaymi-logo.png" alt="Tikaymi Travel" />
+      <div style="display:flex;align-items:center;gap:28px"><div class="swipe"><span>Swipe</span><span class="bar"></span></div><div class="count">1 / 7</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- EN 2 · Cifras -->
+<div class="slide pad" data-screen-label="EN 02" style="left:1180px;top:0;background:var(--paper-alt);justify-content:center">
+  <div class="eyebrow">The numbers</div>
+  <h2 class="h2" style="margin-top:28px;max-width:840px">Cusco is higher than most people expect</h2>
+  <div class="factrow">
+    <div class="fact"><div class="v">3,400</div><div class="k">m · Cusco city</div></div>
+    <div class="fact"><div class="v">2,800</div><div class="k">m · Sacred Valley</div></div>
+    <div class="fact"><div class="v">2,040</div><div class="k">m · Machu Picchu</div></div>
+    <div class="fact"><div class="v">1–2</div><div class="k">days to adjust before hiking</div></div>
+  </div>
+  <svg class="ridge" viewBox="0 0 200 26" style="margin-top:64px"><path d="M2 24 L44 8 L62 16 L86 2 L120 20 L148 12 L198 24" /></svg>
+  <div class="foot"><span></span><div class="count">2 / 7</div></div>
+</div>
+
+<!-- EN 3 · Pasos numerados -->
+<div class="slide pad" data-screen-label="EN 03" style="left:2360px;top:0;justify-content:center">
+  <div class="eyebrow">Day one</div>
+  <h2 class="h2" style="margin-top:26px;max-width:780px">Do less than you planned</h2>
+  <div class="steps">
+    <div class="step"><div class="n">01</div><div><h3>Rest on arrival</h3><p>Give your body the first afternoon. No museums, no long walks.</p></div></div>
+    <div class="step"><div class="n">02</div><div><h3>Drink more water</h3><p>Dry mountain air dehydrates faster than you notice.</p></div></div>
+    <div class="step"><div class="n">03</div><div><h3>Eat lightly</h3><p>Soups and small portions sit better on the first evening.</p></div></div>
+  </div>
+  <div class="foot"><span></span><div class="count">3 / 7</div></div>
+</div>
+
+<!-- EN 4 · Dos columnas -->
+<div class="slide pad" data-screen-label="EN 04" style="left:3540px;top:0;justify-content:center;background:var(--paper-alt)">
+  <div class="eyebrow">Good to know</div>
+  <h2 class="h2" style="margin-top:26px;max-width:800px">What helps, what doesn't</h2>
+  <div class="cols">
+    <div class="col yes"><h4>Helps</h4><ul><li>Slow first day</li><li>Coca tea</li><li>Light meals</li><li>Sleeping lower, in the Valley</li></ul></div>
+    <div class="col no"><h4>Better to avoid</h4><ul><li>Alcohol on arrival</li><li>Heavy hikes on day one</li><li>Big dinners</li><li>Arriving and leaving the same week</li></ul></div>
+  </div>
+  <div class="foot"><span></span><div class="count">4 / 7</div></div>
+</div>
+
+<!-- EN 5 · Foto a sangre + superposición -->
+<div class="slide" data-screen-label="EN 05" style="left:4720px;top:0">
+  <div class="ph" style="position:absolute;inset:0">
+    <div class="ph-note" style="inset:40px 40px auto 40px"><b>Fotografía necesaria</b>Paisaje del Valle Sagrado con río Urubamba — vertical, luz suave, horizonte alineado, espacio libre en la mitad inferior.</div>
+  </div>
+  <div class="overlay"></div>
+  <div class="pad" style="position:relative;margin-top:auto;padding-bottom:170px">
+    <div class="eyebrow on-dark">Where to sleep first</div>
+    <h2 class="h2" style="margin-top:24px;color:#fff;max-width:840px">Start in the Valley, 600 m lower</h2>
+    <p class="body on-dark" style="margin-top:32px;max-width:800px">Two nights in the Sacred Valley before the city is the simplest way to make the altitude easier.</p>
+  </div>
+  <div class="foot"><span></span><div class="count on-dark">5 / 7</div></div>
+</div>
+
+<!-- EN 6 · Pregunta / respuesta + panel -->
+<div class="slide pad" data-screen-label="EN 06" style="left:5900px;top:0;justify-content:center">
+  <div class="eyebrow">Questions we get</div>
+  <div class="qa">
+    <div><div class="q">Do I need medication?</div><div class="a">Ask your own doctor before travelling. Many of our travellers do fine with slow days, water and coca tea.</div></div>
+    <div><div class="q">How many days in Cusco?</div><div class="a">Five is comfortable for the Valley, the city and Machu Picchu without rushing.</div></div>
+  </div>
+  <div class="panel" style="margin-top:64px"><div class="k">Our recommendation</div><p>Keep your first afternoon empty. Everything else fits around it.</p></div>
+  <div class="foot"><span></span><div class="count">6 / 7</div></div>
+</div>
+
+<!-- EN 7 · Cierre -->
+<div class="slide pad" data-screen-label="EN 07" style="left:7080px;top:0;background:var(--teal-deep);color:#fff;justify-content:center">
+  <div class="eyebrow on-dark">Cusco · Sacred Valley</div>
+  <h2 class="h2" style="margin-top:32px;color:#fff;max-width:860px">We build the days around the altitude</h2>
+  <p class="body on-dark" style="margin-top:34px;max-width:800px">Tell us when you arrive and how long you have. We'll order the route so your first days are the easy ones.</p>
+  <a class="cta" href="https://tikaymi.com" style="margin-top:60px;align-self:flex-start">Plan your trip with us</a>
+  <div class="rule" style="margin:60px 0 42px;background:rgba(255,255,255,.18)"></div>
+  <div class="contact" style="color:rgba(255,255,255,.92)">tikaymi.com<br />WhatsApp: +51 984 387 227</div>
+  <div class="foot">
+    <img class="logo" src="assets/tikaymi-logo.png" alt="Tikaymi Travel" style="background:var(--paper);padding:16px 22px" />
+    <div class="count on-dark">7 / 7</div>
+  </div>
+</div>
+
+<!-- ============ ESPAÑOL ============ -->
+<div class="tag" style="left:0;top:1502px">Español — Informativo — 1080 × 1350</div>
+
+<!-- ES 1 -->
+<div class="slide" data-screen-label="ES 01" style="left:0;top:1560px">
+  <div class="ph" style="flex:0 0 760px">
+    <div class="ph-note"><b>Fotografía necesaria</b>Vista de la ciudad del Cusco desde un mirador — horizontal, luz de tarde, tejados y montañas al fondo, sin filtros intensos.</div>
+  </div>
+  <div style="flex:1;padding:60px 88px 0;position:relative">
+    <div class="eyebrow">Llegar al Cusco · 3 400 m</div>
+    <h1 class="h1" style="margin-top:24px;max-width:900px">Tus primeras 48 horas en altura</h1>
+    <div class="foot">
+      <img class="logo" src="assets/tikaymi-logo.png" alt="Tikaymi Travel" />
+      <div style="display:flex;align-items:center;gap:28px"><div class="swipe"><span>Desliza</span><span class="bar"></span></div><div class="count">1 / 7</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ES 2 -->
+<div class="slide pad" data-screen-label="ES 02" style="left:1180px;top:1560px;background:var(--paper-alt);justify-content:center">
+  <div class="eyebrow">Las cifras</div>
+  <h2 class="h2" style="margin-top:28px;max-width:860px">El Cusco está más alto de lo que parece</h2>
+  <div class="factrow">
+    <div class="fact"><div class="v">3 400</div><div class="k">m · Ciudad del Cusco</div></div>
+    <div class="fact"><div class="v">2 800</div><div class="k">m · Valle Sagrado</div></div>
+    <div class="fact"><div class="v">2 040</div><div class="k">m · Machu Picchu</div></div>
+    <div class="fact"><div class="v">1–2</div><div class="k">días para adaptarse antes de caminar</div></div>
+  </div>
+  <svg class="ridge" viewBox="0 0 200 26" style="margin-top:64px"><path d="M2 24 L44 8 L62 16 L86 2 L120 20 L148 12 L198 24" /></svg>
+  <div class="foot"><span></span><div class="count">2 / 7</div></div>
+</div>
+
+<!-- ES 3 -->
+<div class="slide pad" data-screen-label="ES 03" style="left:2360px;top:1560px;justify-content:center">
+  <div class="eyebrow">Primer día</div>
+  <h2 class="h2" style="margin-top:26px;max-width:800px">Haz menos de lo que planeaste</h2>
+  <div class="steps">
+    <div class="step"><div class="n">01</div><div><h3>Descansa al llegar</h3><p>Regálale a tu cuerpo la primera tarde. Sin museos ni caminatas largas.</p></div></div>
+    <div class="step"><div class="n">02</div><div><h3>Toma más agua</h3><p>El aire seco de la montaña deshidrata más rápido de lo que notas.</p></div></div>
+    <div class="step"><div class="n">03</div><div><h3>Come ligero</h3><p>Las sopas y las porciones pequeñas caen mejor la primera noche.</p></div></div>
+  </div>
+  <div class="foot"><span></span><div class="count">3 / 7</div></div>
+</div>
+
+<!-- ES 4 -->
+<div class="slide pad" data-screen-label="ES 04" style="left:3540px;top:1560px;justify-content:center;background:var(--paper-alt)">
+  <div class="eyebrow">Bueno saberlo</div>
+  <h2 class="h2" style="margin-top:26px;max-width:820px">Qué ayuda y qué no</h2>
+  <div class="cols">
+    <div class="col yes"><h4>Ayuda</h4><ul><li>Primer día tranquilo</li><li>Mate de coca</li><li>Comidas ligeras</li><li>Dormir más bajo, en el Valle</li></ul></div>
+    <div class="col no"><h4>Mejor evitar</h4><ul><li>Alcohol al llegar</li><li>Caminatas fuertes el primer día</li><li>Cenas abundantes</li><li>Llegar y salir la misma semana</li></ul></div>
+  </div>
+  <div class="foot"><span></span><div class="count">4 / 7</div></div>
+</div>
+
+<!-- ES 5 -->
+<div class="slide" data-screen-label="ES 05" style="left:4720px;top:1560px">
+  <div class="ph" style="position:absolute;inset:0">
+    <div class="ph-note" style="inset:40px 40px auto 40px"><b>Fotografía necesaria</b>Paisaje del Valle Sagrado con río Urubamba — vertical, luz suave, horizonte alineado, espacio libre en la mitad inferior.</div>
+  </div>
+  <div class="overlay"></div>
+  <div class="pad" style="position:relative;margin-top:auto;padding-bottom:170px">
+    <div class="eyebrow on-dark">Dónde dormir primero</div>
+    <h2 class="h2" style="margin-top:24px;color:#fff;max-width:860px">Empieza en el Valle, 600 m más abajo</h2>
+    <p class="body on-dark" style="margin-top:32px;max-width:810px">Dos noches en el Valle Sagrado antes de la ciudad son la forma más simple de llevar mejor la altura.</p>
+  </div>
+  <div class="foot"><span></span><div class="count on-dark">5 / 7</div></div>
+</div>
+
+<!-- ES 6 -->
+<div class="slide pad" data-screen-label="ES 06" style="left:5900px;top:1560px;justify-content:center">
+  <div class="eyebrow">Lo que nos preguntan</div>
+  <div class="qa">
+    <div><div class="q">¿Necesito medicamentos?</div><div class="a">Consúltalo con tu médico antes del viaje. A muchos viajeros les basta con días tranquilos, agua y mate de coca.</div></div>
+    <div><div class="q">¿Cuántos días en el Cusco?</div><div class="a">Cinco alcanzan con calma para el Valle, la ciudad y Machu Picchu.</div></div>
+  </div>
+  <div class="panel" style="margin-top:64px"><div class="k">Nuestra recomendación</div><p>Deja libre tu primera tarde. Todo lo demás se acomoda alrededor.</p></div>
+  <div class="foot"><span></span><div class="count">6 / 7</div></div>
+</div>
+
+<!-- ES 7 -->
+<div class="slide pad" data-screen-label="ES 07" style="left:7080px;top:1560px;background:var(--teal-deep);color:#fff;justify-content:center">
+  <div class="eyebrow on-dark">Cusco · Valle Sagrado</div>
+  <h2 class="h2" style="margin-top:32px;color:#fff;max-width:880px">Armamos los días pensando en la altura</h2>
+  <p class="body on-dark" style="margin-top:34px;max-width:810px">Cuéntanos cuándo llegas y cuántos días tienes. Ordenamos la ruta para que los primeros sean los más suaves.</p>
+  <a class="cta" href="https://tikaymi.com" style="margin-top:60px;align-self:flex-start">Planifica tu viaje con nosotros</a>
+  <div class="rule" style="margin:60px 0 42px;background:rgba(255,255,255,.18)"></div>
+  <div class="contact" style="color:rgba(255,255,255,.92)">tikaymi.com<br />WhatsApp: +51 984 387 227</div>
+  <div class="foot">
+    <img class="logo" src="assets/tikaymi-logo.png" alt="Tikaymi Travel" style="background:var(--paper);padding:16px 22px" />
+    <div class="count on-dark">7 / 7</div>
+  </div>
+</div>
+
+</body>
+</html>
