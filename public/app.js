@@ -5,7 +5,7 @@ let K = {}, tab = 'panel';
 const FAM = { atencion: 'Atención', intencion: 'Intención', negocio: 'Negocio' };
 const CONF = { datos_insuficientes: 'Datos insuficientes', senal_inicial: 'Señal inicial', patron_probable: 'Patrón probable', patron_confirmado: 'Patrón confirmado' };
 const TIPO = { observado: 'Observado', interpretacion: 'Interpretación', recomendacion: 'Recomendación', hipotesis: 'Hipótesis' };
-const TABS = { panel: 'Panel', objetivos: 'Objetivos', posts: 'Publicaciones', importar: 'Importar CSV', leads: 'Leads', aprendizajes: 'Aprendizajes', calendario: 'Calendario', enlaces: 'Enlaces', carrusel: 'Carrusel' };
+const TABS = { panel: 'Panel', objetivos: 'Objetivos', posts: 'Publicaciones', importar: 'Importar CSV', leads: 'Leads', aprendizajes: 'Aprendizajes', calendario: 'Calendario', enlaces: 'Enlaces', carrusel: 'Carrusel', info: 'Info aprobada', generar: 'Generar' };
 const LBL = k => String(k).replace(/_/g, ' ');
 const opts = (list, sel) => list.map(o => `<option value="${esc(o)}"${o === sel ? ' selected' : ''}>${esc(LBL(o))}</option>`).join('');
 
@@ -14,7 +14,7 @@ async function api(path, method = 'GET', body) {
   const r = await fetch('/api' + path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
   if (r.status === 401) { showLogin(); throw new Error('Sesión requerida'); }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || 'Error ' + r.status);
+  if (!r.ok) throw Object.assign(new Error(j.error || 'Error ' + r.status), { status: r.status });
   return j;
 }
 const guard = fn => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, true); } };
@@ -83,7 +83,7 @@ function best(m) {
     `<p><b>${esc(LBL(k))}:</b> ${esc(typeof v === 'object' && v ? (v.titulo ?? v.grupo ?? v.nombre ?? JSON.stringify(v)) : v)}</p>`).join('') + '</div>' : '';
 }
 async function panel() {
-  const a = await api('/analysis');
+  const [a, al, co] = await Promise.all([api('/analysis'), api('/alerts').catch(() => []), api('/cohorts').catch(() => ({}))]);
   const r = a.resumen || {};
   const conv = a.conversion || {};
   const kp = (l, v) => `<div class="card kpi fam-negocio"><small>${l}</small><b>${esc(v ?? '—')}</b></div>`;
@@ -93,7 +93,11 @@ async function panel() {
   <div class="card legend"><span class="fam-atencion"><i style="background:var(--teal)"></i>Atención (alcance, vistas, likes)</span><span class="fam-intencion"><i style="background:var(--ocre)"></i>Intención (clics, guardados, mensajes)</span><span class="fam-negocio"><i style="background:var(--terra)"></i>Negocio (consultas, cotizaciones, reservas)</span> ${badgeC(a.confianza)}</div>
   <h3>Recomendaciones prioritarias</h3>${(a.recomendaciones || []).map(recCard).join('') || '<p>Sin recomendaciones todavía.</p>'}
   ${section('Por plataforma', a.por_plataforma)}${section('Por formato', a.por_formato)}${section('Por idioma', a.por_idioma)}${section('Por tema', a.por_tema)}${section('Por CTA', a.por_cta)}
-  ${conv.sin_datos ? '' : section('Conversión', conv)}${best(a.mejores)}`;
+  ${conv.sin_datos ? '' : section('Conversión', conv)}${best(a.mejores)}
+  <h3>Alertas</h3><div class="card">${(al || []).length ? al.map(x => `<p><span class="badge">${esc(LBL(x.tipo))}</span> ${esc(x.mensaje)}</p>`).join('') : '<p class="mute">Sin alertas.</p>'}</div>
+  <h3>Cohortes de leads (por semana)</h3><div class="card tablewrap">${Object.keys(co || {}).length ? `<table><tr><th>Semana</th><th>Total</th><th>Por estado</th><th>Tasa cotizado/reservado</th></tr>${Object.entries(co).map(([w, c]) => `<tr><td>${esc(w)}</td><td>${esc(c.total)}</td><td>${esc(Object.entries(c.por_estado || {}).map(([k, v]) => LBL(k) + ': ' + v).join(', '))}</td><td>${c.datos_suficientes && num(c.tasa_a_cotizado_reservado) !== null ? esc((c.tasa_a_cotizado_reservado * 100).toFixed(1)) + '%' : 'datos insuficientes (n&lt;5)'}</td></tr>`).join('')}</table>` : '<p class="mute">Sin leads: datos insuficientes.</p>'}</div>
+  <p><button id="themes">Clasificar temas</button></p>`;
+  $('#themes').onclick = guard(async () => { const t = await api('/themes/auto', 'POST'); toast(`Temas clasificados: ${t.classified} de ${t.total}`); go('panel'); });
 }
 
 /* ---------- Objetivos ---------- */
@@ -235,6 +239,64 @@ async function carrusel() {
   });
 }
 
-const views = { panel, objetivos, posts, importar, leads, aprendizajes, calendario, enlaces, carrusel };
+/* ---------- Info aprobada ---------- */
+async function info() {
+  const [list, assets] = await Promise.all([api('/approved-info'), api('/assets')]);
+  $('#view').innerHTML = `<h2>Información aprobada</h2><p class="mute">La generación usa solo esta información. Marca «autorizado para publicar» únicamente si se puede difundir.</p>
+  <form class="card form" id="fi"><label>Tipo *<select name="tipo">${opts(K.INFO_TIPOS)}</select></label><label>Título *<input name="titulo" required></label>
+  <label class="full">Texto *<textarea name="texto" rows="3" required></textarea></label><label>Fuente<input name="fuente"></label>
+  <label><input type="checkbox" name="autorizado_publicar"> Autorizado para publicar</label><div><button>Agregar</button></div></form>
+  <div class="card tablewrap"><table><tr><th>Tipo</th><th>Título</th><th>Texto</th><th>Fuente</th><th>Publicar</th><th></th></tr>${list.map(i => `<tr><td>${esc(LBL(i.tipo))}</td><td>${esc(i.titulo)}</td><td>${esc(i.texto)}</td><td>${esc(i.fuente)}</td><td><input type="checkbox" data-ai="${esc(i.id)}"${i.autorizado_publicar ? ' checked' : ''}></td><td><button class="ghost" data-di="${esc(i.id)}">Borrar</button></td></tr>`).join('') || '<tr><td colspan="6">Sin información aprobada.</td></tr>'}</table></div>
+  <h2>Fotos y videos</h2><form class="card form" id="fa"><label>Tipo *<select name="tipo">${opts(K.ASSET_TIPOS)}</select></label><label>URL *<input name="url" required></label>
+  <label>Descripción<input name="descripcion"></label><label>Destino<input name="destino" placeholder="reels, carrusel…"></label><div><button>Agregar</button></div></form>
+  <div class="card tablewrap"><table><tr><th>Tipo</th><th>URL</th><th>Descripción</th><th>Destino</th><th></th></tr>${assets.map(a => `<tr><td>${esc(a.tipo)}</td><td>${esc(a.url)}</td><td>${esc(a.descripcion)}</td><td>${esc(a.destino)}</td><td><button class="ghost" data-da="${esc(a.id)}">Borrar</button></td></tr>`).join('') || '<tr><td colspan="5">Sin recursos.</td></tr>'}</table></div>`;
+  $('#fi').onsubmit = guard(async e => { e.preventDefault(); const d = formData(e.target); d.autorizado_publicar = e.target.autorizado_publicar.checked; await api('/approved-info', 'POST', d); toast('Agregado'); go('info'); });
+  $('#fa').onsubmit = guard(async e => { e.preventDefault(); await api('/assets', 'POST', formData(e.target)); toast('Agregado'); go('info'); });
+  $('#view').onchange = guard(async e => { const id = e.target.dataset?.ai; if (!id) return; await api('/approved-info/' + encodeURIComponent(id), 'PUT', { autorizado_publicar: e.target.checked }); toast('Actualizado'); });
+  $('#view').onclick = guard(async e => {
+    const { di, da } = e.target.dataset || {};
+    if (di && confirm('¿Borrar esta información?')) { await api('/approved-info/' + encodeURIComponent(di), 'DELETE'); go('info'); }
+    if (da && confirm('¿Borrar este recurso?')) { await api('/assets/' + encodeURIComponent(da), 'DELETE'); go('info'); }
+  });
+}
+
+/* ---------- Generar ---------- */
+const GEN_ERR = { 400: 'Faltan datos en la publicación o petición', 422: 'No hay información aprobada: agrégala en «Info aprobada»', 503: 'Falta configurar ANTHROPIC_API_KEY en el servidor' };
+async function generar() {
+  const [ps, gens] = await Promise.all([api('/posts'), api('/generated')]);
+  $('#view').innerHTML = `<h2>Generar contenido</h2><form class="card form" id="f"><label>Publicación *<select name="post_id" required><option value="">— elegir —</option>${ps.map(p => `<option value="${esc(p.id)}">#${esc(p.id)} ${esc(p.titulo)}</option>`).join('')}</select></label>
+  <label>Tipo de contenido<select name="tipo">${opts(K.CONTENIDO_TIPOS)}</select></label><label>Idioma<select name="idioma">${opts(K.IDIOMAS)}</select></label><div><button>Generar</button></div></form><div id="gerr"></div>
+  <h3>Contenido generado</h3>${gens.map(g => `<div class="card"><small class="mute">#${esc(g.id)} · post ${esc(g.post_id)} · ${esc(LBL(g.tipo))} · ${esc(g.idioma)}</small> <span class="badge">${esc(LBL(g.estado))}</span>
+  <pre style="white-space:pre-wrap">${esc(g.contenido)}</pre>
+  <button data-g="${esc(g.id)}" data-s="aprobado">Aprobar</button> <button class="ghost" data-g="${esc(g.id)}" data-s="rechazado">Rechazar</button> <button class="ghost" data-cp="${esc(g.id)}">Copiar</button>${g.tipo === 'carrusel' && g.estado === 'aprobado' ? ` <button class="ghost" data-dl="${esc(g.id)}">Descargar JSON</button>` : ''}</div>`).join('') || '<p class="mute">Nada generado todavía.</p>'}`;
+  $('#f').onsubmit = async e => {
+    e.preventDefault(); $('#gerr').innerHTML = '';
+    const d = formData(e.target); d.post_id = Number(d.post_id);
+    const btn = e.target.querySelector('button'); btn.disabled = true;
+    try { await api('/generate', 'POST', d); toast('Generado, queda en revisión'); go('generar'); }
+    catch (er) {
+      const code = er.status;
+      $('#gerr').innerHTML = `<div class="warn"><b>No se pudo generar${code ? ' (' + esc(code) + ')' : ''}.</b> ${esc(er.message)}${GEN_ERR[code] ? '<br>' + esc(GEN_ERR[code]) : ''}</div>`;
+    } finally { btn.disabled = false; }
+  };
+  $('#view').onclick = guard(async e => {
+    const { g, s, cp, dl } = e.target.dataset || {};
+    if (g && s) {
+      if (s === 'aprobado' && !confirm('¿Confirmas que una persona revisó y aprueba este contenido?')) return;
+      await api('/generated/' + encodeURIComponent(g), 'PUT', { estado: s }); toast('Estado: ' + s); go('generar');
+    }
+    const item = gens.find(x => String(x.id) === (cp || dl));
+    if (cp && item) { await navigator.clipboard.writeText(item.contenido); toast('Copiado'); }
+    if (dl && item) {
+      let j; try { j = JSON.parse(item.contenido); } catch { throw new Error('El contenido no es JSON válido'); }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(j, null, 2)], { type: 'application/json' }));
+      a.download = `tikaymi-${j.tipo || 'carrusel'}-${item.id}.json`;
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+  });
+}
+
+const views = { panel, objetivos, posts, importar, leads, aprendizajes, calendario, enlaces, carrusel, info, generar };
 window.go = go;
 api('/constants').then(start).catch(() => showLogin());
