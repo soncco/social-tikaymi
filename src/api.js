@@ -8,6 +8,9 @@ const { importCsv } = require('./modules/importer');
 const { autoClassify } = require('./modules/themes');
 const { alerts } = require('./modules/alerts');
 const { cohorts } = require('./modules/cohorts');
+const abtests = require('./modules/abtests');
+const { weeklyDigest } = require('./modules/digest');
+const scheduleMod = require('./modules/schedule');
 
 const content = require('./modules/content');
 
@@ -113,6 +116,23 @@ function api(db) {
 
   // Cohorts de leads
   r.get('/cohorts', wrap(req => cohorts(db)));
+
+  // Fase 3 — Pruebas A/B (misma plataforma, una sola variable, nunca por me gusta)
+  r.get('/abtests', wrap(() => abtests.list(db)));
+  r.post('/abtests', wrap(req => ({ id: abtests.create(db, req.body) })));
+  r.get('/abtests/:id/evaluate', wrap(req => abtests.evaluate(db, req.params.id)));
+
+  // Fase 3 — Recomendaciones periódicas (sin scheduler: llamar desde cron externo)
+  r.get('/digest.md', (req, res, next) => {
+    try { res.type('text/markdown').send(weeklyDigest(db, { periodo: req.query.periodo })); } catch (e) { next(e); }
+  });
+
+  // Fase 3 — Programación MANUAL (la app nunca publica sola)
+  r.get('/schedule', wrap(() => scheduleMod.list(db)));
+  r.put('/posts/:id/schedule', wrap(req => scheduleMod.schedule(db, req.params.id, req.body.programado_para)));
+  r.get('/schedule.ics', (req, res, next) => {
+    try { res.type('text/calendar').send(scheduleMod.icsCalendar(db)); } catch (e) { next(e); }
+  });
 
   return r;
 }

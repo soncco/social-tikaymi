@@ -34,14 +34,30 @@ CREATE TABLE IF NOT EXISTS generated(
   id INTEGER PRIMARY KEY, post_id INTEGER REFERENCES posts(id) ON DELETE CASCADE, tipo TEXT NOT NULL,
   idioma TEXT NOT NULL, contenido TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'revision',
   created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+-- Fase 3: pruebas A/B manuales (§14). Una prueba compara exactamente dos publicaciones
+-- de la MISMA plataforma variando una sola cosa. La conclusión la escribe evaluate().
+CREATE TABLE IF NOT EXISTS ab_tests(
+  id INTEGER PRIMARY KEY, nombre TEXT NOT NULL, variable TEXT NOT NULL,
+  post_a INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  post_b INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  creado TEXT DEFAULT CURRENT_TIMESTAMP, conclusion TEXT);
 `;
+
+// Migraciones seguras: columnas añadidas después de la primera versión de la base.
+// ALTER TABLE sólo se ejecuta si la columna todavía no existe (idempotente).
+function migrate(db) {
+  const cols = db.prepare('PRAGMA table_info(posts)').all().map(c => c.name);
+  // §11: programación manual (recordatorio), nunca publicación automática.
+  if (!cols.includes('programado_para')) db.exec('ALTER TABLE posts ADD COLUMN programado_para TEXT');
+}
 
 function open(file) {
   const db = new Database(file || process.env.DB_FILE || path.join(__dirname, '../../data/tikaymi.db'));
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
 }
 
-module.exports = { open, METRICS };
+module.exports = { open, migrate, METRICS };
