@@ -1,6 +1,8 @@
 const { Router } = require('express');
 const C = require('./constants');
 const posts = require('./modules/posts');
+const analysis = require('./modules/analysis');
+const { importCsv } = require('./modules/importer');
 
 const wrap = fn => (req, res, next) => { try { res.json(fn(req, res) ?? { ok: true }); } catch (e) { next(e); } };
 
@@ -37,9 +39,25 @@ function api(db) {
     db.prepare('UPDATE leads SET estado=? WHERE id=?').run(req.body.estado, req.params.id);
   }));
 
+  // Análisis (confianza explícita, sin mezclar plataformas)
+  r.get('/analysis', wrap(req => analysis.analyze(db, { periodo: req.query.periodo })));
+
   // Aprendizajes
   r.get('/learnings', wrap(() => db.prepare('SELECT * FROM learnings ORDER BY id DESC').all()));
   r.post('/learnings', wrap(req => ({ id: db.prepare('INSERT INTO learnings(texto,post_id) VALUES(?,?)').run(req.body.texto, req.body.post_id ?? null).lastInsertRowid })));
+
+  // Importar CSV
+  r.post('/import/:plataforma', wrap(req => {
+    if (!req.body.csv) throw Object.assign(new Error('csv field es obligatorio'), { status: 400 });
+    const plataforma = req.params.plataforma;
+    if (!C.PLATAFORMAS.includes(plataforma)) throw Object.assign(new Error(`plataforma no válida: ${plataforma}`), { status: 400 });
+    const result = importCsv(db, plataforma, req.body.csv);
+    if (result.errors.length > 0) {
+      result.errors.forEach(err => console.error(`[import ${plataforma}] ${err}`));
+    }
+    return result;
+  }));
+
   return r;
 }
 module.exports = { api };
