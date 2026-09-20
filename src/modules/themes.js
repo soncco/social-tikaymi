@@ -27,7 +27,7 @@ function classify(text) {
 
   for (const [tema, keywords] of Object.entries(DESTINATION_KEYWORDS)) {
     for (const keyword of keywords) {
-      if (norm.includes(keyword)) {
+      if (norm.includes(normalize(keyword))) {
         return tema;
       }
     }
