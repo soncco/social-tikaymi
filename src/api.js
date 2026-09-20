@@ -1,0 +1,45 @@
+const { Router } = require('express');
+const C = require('./constants');
+const posts = require('./modules/posts');
+
+const wrap = fn => (req, res, next) => { try { res.json(fn(req, res) ?? { ok: true }); } catch (e) { next(e); } };
+
+function api(db) {
+  const r = Router();
+  r.get('/constants', wrap(() => C));
+
+  // Objetivos de negocio por período
+  r.get('/objectives', wrap(() => db.prepare('SELECT * FROM objectives ORDER BY id DESC').all()));
+  r.post('/objectives', wrap(req => {
+    const { periodo, objetivo_negocio, meta } = req.body;
+    if (!periodo || !C.OBJETIVOS_NEGOCIO.includes(objetivo_negocio)) throw Object.assign(new Error('periodo y objetivo_negocio válidos son obligatorios'), { status: 400 });
+    return { id: db.prepare('INSERT INTO objectives(periodo,objetivo_negocio,meta) VALUES(?,?,?)').run(periodo, objetivo_negocio, meta ?? null).lastInsertRowid };
+  }));
+
+  // Publicaciones (siempre con objetivo)
+  r.get('/posts', wrap(() => db.prepare('SELECT p.*, m.reach, m.plays, m.likes, m.saves FROM posts p LEFT JOIN metrics m ON m.post_id=p.id ORDER BY fecha DESC, p.id DESC').all()));
+  r.post('/posts', wrap(req => ({ id: posts.create(db, req.body) })));
+  r.put('/posts/:id', wrap(req => posts.update(db, req.params.id, req.body)));
+  r.delete('/posts/:id', wrap(req => db.prepare('DELETE FROM posts WHERE id=?').run(req.params.id) && undefined));
+
+  // Leads
+  r.get('/leads', wrap(() => db.prepare('SELECT * FROM leads ORDER BY id DESC').all()));
+  r.post('/leads', wrap(req => {
+    const b = req.body;
+    if (b.estado && !C.LEAD_ESTADOS.includes(b.estado)) throw Object.assign(new Error('estado inválido'), { status: 400 });
+    const post = b.campaign_code && db.prepare('SELECT id FROM posts WHERE campaign_code=?').get(b.campaign_code);
+    const id = db.prepare('INSERT INTO leads(post_id,campaign_code,fuente,estado,fecha_viaje,viajeros,notas) VALUES(?,?,?,?,?,?,?)')
+      .run(b.post_id ?? post?.id ?? null, b.campaign_code ?? null, b.fuente ?? null, b.estado ?? 'nuevo', b.fecha_viaje ?? null, b.viajeros ?? null, b.notas ?? null).lastInsertRowid;
+    return { id, atribuido: !!(b.post_id ?? post) };
+  }));
+  r.put('/leads/:id', wrap(req => {
+    if (!C.LEAD_ESTADOS.includes(req.body.estado)) throw Object.assign(new Error('estado inválido'), { status: 400 });
+    db.prepare('UPDATE leads SET estado=? WHERE id=?').run(req.body.estado, req.params.id);
+  }));
+
+  // Aprendizajes
+  r.get('/learnings', wrap(() => db.prepare('SELECT * FROM learnings ORDER BY id DESC').all()));
+  r.post('/learnings', wrap(req => ({ id: db.prepare('INSERT INTO learnings(texto,post_id) VALUES(?,?)').run(req.body.texto, req.body.post_id ?? null).lastInsertRowid })));
+  return r;
+}
+module.exports = { api };
