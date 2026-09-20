@@ -87,7 +87,7 @@ async function panel() {
   const r = a.resumen || {};
   const conv = a.conversion || {};
   const kp = (l, v) => `<div class="card kpi fam-negocio"><small>${l}</small><b>${esc(v ?? '—')}</b></div>`;
-  $('#view').innerHTML = `<h2>Panel</h2>
+  $('#view').innerHTML = `<h2>Panel <a href="/api/report.md" download="informe-tikaymi.md" style="font-size:14px;font-weight:400">Descargar informe (.md)</a></h2>
   <div class="grid">${kp('Objetivo del período', r.objetivo_actual ? LBL(r.objetivo_actual.objetivo_negocio ?? r.objetivo_actual) : 'Sin objetivo')}${kp('Publicaciones', r.publicaciones)}${kp('Consultas', r.consultas)}${kp('Cotizaciones', r.cotizaciones)}${kp('Reservas', r.reservas)}</div>
   ${conv.sin_datos ? '<div class="warn"><b>Sin datos de conversión.</b> No hay leads atribuidos a publicaciones (campaign_code); no se puede afirmar qué contenido convierte. Solo se muestran métricas de atención e intención.</div>' : ''}
   <div class="card legend"><span class="fam-atencion"><i style="background:var(--teal)"></i>Atención (alcance, vistas, likes)</span><span class="fam-intencion"><i style="background:var(--ocre)"></i>Intención (clics, guardados, mensajes)</span><span class="fam-negocio"><i style="background:var(--terra)"></i>Negocio (consultas, cotizaciones, reservas)</span> ${badgeC(a.confianza)}</div>
