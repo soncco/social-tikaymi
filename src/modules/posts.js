@@ -4,6 +4,9 @@ const REQUIRED = ['plataforma', 'titulo', 'objetivo_negocio', 'objetivo_marketin
 const ENUMS = { plataforma: C.PLATAFORMAS, objetivo_negocio: C.OBJETIVOS_NEGOCIO, etapa_embudo: C.ETAPAS, objetivo_contenido: C.OBJETIVOS_CONTENIDO, idioma: C.IDIOMAS_HISTORICOS, estado: C.POST_ESTADOS };
 const FIELDS = [...REQUIRED, 'external_id', 'fecha', 'formato', 'tema', 'campaign_code', 'estado'];
 const BULK_FIELDS = ['objetivo_negocio', 'objetivo_marketing', 'objetivo_contenido', 'audiencia', 'etapa_embudo', 'cta', 'metrica_principal', 'idioma', 'formato', 'tema', 'campaign_code'];
+const CLASSIFICATION_FIELDS = ['objetivo_negocio', 'objetivo_marketing', 'objetivo_contenido', 'audiencia', 'etapa_embudo', 'cta', 'metrica_principal', 'idioma'];
+const AUDITED_FIELDS = [...CLASSIFICATION_FIELDS, 'tema'];
+const missingClassification = post => CLASSIFICATION_FIELDS.filter(k => !String(post[k] ?? '').trim() || post[k] === 'sin_clasificar');
 
 // Regla del documento: no existe publicación sin objetivo, audiencia, etapa, CTA, métrica, plataforma e idioma.
 function validate(body) {
@@ -30,23 +33,56 @@ function update(db, id, body) {
   if (err) throw Object.assign(new Error(err), { status: 400 });
   const cols = FIELDS.filter(k => k in body);
   if (cols.length) db.prepare(`UPDATE posts SET ${cols.map(k => k + '=?')} WHERE id=?`).run([...cols.map(k => body[k]), id]);
+  if (AUDITED_FIELDS.some(k => k in body && body[k] !== cur[k])) {
+    db.prepare('UPDATE post_classification_audit SET manually_modified_at=CURRENT_TIMESTAMP WHERE post_id=?').run(id);
+  }
 }
 
 // Clasificación masiva de publicaciones importadas. A diferencia de update(),
 // acepta avanzar por partes: el usuario puede asignar hoy el tema y mañana el
 // CTA sin tener que completar diez campos en una sola pantalla.
-function bulkUpdate(db, ids, body) {
-  const cleanIds = [...new Set((ids || []).map(Number).filter(Number.isInteger))];
+function bulkUpdate(db, ids, body, { overwrite = false } = {}) {
+  const cleanIds = [...new Set((Array.isArray(ids) ? ids : []).map(Number).filter(Number.isInteger))];
   if (!cleanIds.length) throw Object.assign(new Error('Selecciona al menos una publicación'), { status: 400 });
   const cols = BULK_FIELDS.filter(k => k in body && body[k] !== '' && body[k] != null);
   if (!cols.length) throw Object.assign(new Error('Elige al menos un campo para aplicar'), { status: 400 });
   for (const [k, list] of Object.entries(ENUMS)) {
     if (k in body && !list.includes(body[k])) throw Object.assign(new Error(`Valor inválido en ${k}: ${body[k]}`), { status: 400 });
   }
-  const marks = cleanIds.map(() => '?').join(',');
-  const result = db.prepare(`UPDATE posts SET ${cols.map(k => k + '=?').join(',')} WHERE id IN (${marks})`)
-    .run(...cols.map(k => body[k]), ...cleanIds);
-  return { updated: result.changes };
+  const find = db.prepare('SELECT * FROM posts WHERE id=?');
+  return db.transaction(() => {
+    let updated = 0;
+    let skippedExisting = 0;
+    const missingByField = {};
+    let remaining = 0;
+    let selected = 0;
+    for (const id of cleanIds) {
+      const current = find.get(id);
+      if (!current) continue;
+      selected++;
+      const changes = cols.filter(k => {
+        if (current[k] === body[k]) return false;
+        if (overwrite || current[k] == null || current[k] === '' || current[k] === 'sin_clasificar') return true;
+        skippedExisting++;
+        return false;
+      });
+      if (changes.length) {
+        db.prepare(`UPDATE posts SET ${changes.map(k => k + '=?').join(',')} WHERE id=?`)
+          .run(...changes.map(k => body[k]), id);
+        if (changes.some(k => AUDITED_FIELDS.includes(k))) {
+          db.prepare('UPDATE post_classification_audit SET manually_modified_at=CURRENT_TIMESTAMP WHERE post_id=?').run(id);
+        }
+        updated++;
+      }
+      const after = { ...current, ...Object.fromEntries(changes.map(k => [k, body[k]])) };
+      const missing = missingClassification(after);
+      if (missing.length) {
+        remaining++;
+        for (const k of missing) missingByField[k] = (missingByField[k] || 0) + 1;
+      }
+    }
+    return { selected, updated, remaining, missing_by_field: missingByField, skipped_existing: skippedExisting };
+  })();
 }
 
-module.exports = { create, update, bulkUpdate, validate };
+module.exports = { create, update, bulkUpdate, validate, missingClassification };

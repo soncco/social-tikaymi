@@ -30,11 +30,32 @@ CREATE TABLE IF NOT EXISTS approved_info(
 CREATE TABLE IF NOT EXISTS assets(
   id INTEGER PRIMARY KEY, tipo TEXT NOT NULL, url TEXT NOT NULL, descripcion TEXT, destino TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS site_pages(
+  url TEXT PRIMARY KEY, lang TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL,
+  description TEXT, body_text TEXT, content_hash TEXT NOT NULL,
+  sitemap_lastmod TEXT, fetched_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  approved INTEGER NOT NULL DEFAULT 0, changed_at TEXT,
+  active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS site_syncs(
+  id INTEGER PRIMARY KEY, started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at TEXT, found INTEGER NOT NULL DEFAULT 0, fetched INTEGER NOT NULL DEFAULT 0,
+  created INTEGER NOT NULL DEFAULT 0, changed INTEGER NOT NULL DEFAULT 0,
+  unchanged INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0,
+  removed INTEGER NOT NULL DEFAULT 0, error TEXT);
 -- Todo lo generado nace en 'revision': aprobación humana obligatoria antes de publicar (§8).
 CREATE TABLE IF NOT EXISTS generated(
   id INTEGER PRIMARY KEY, post_id INTEGER REFERENCES posts(id) ON DELETE CASCADE, tipo TEXT NOT NULL,
   idioma TEXT NOT NULL, contenido TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'revision',
   created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS editorial_plans(
+  id INTEGER PRIMARY KEY, cadence TEXT NOT NULL, objetivo_negocio TEXT NOT NULL,
+  method TEXT NOT NULL DEFAULT 'analisis', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS plan_ideas(
+  id INTEGER PRIMARY KEY, plan_id INTEGER NOT NULL REFERENCES editorial_plans(id) ON DELETE CASCADE,
+  title TEXT NOT NULL, platforms TEXT NOT NULL, brief_json TEXT NOT NULL,
+  evidence TEXT NOT NULL, limitations TEXT NOT NULL, confidence TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'propuesta', position INTEGER NOT NULL, planned_for TEXT,
+  source_url TEXT);
 -- Fase 3: pruebas A/B manuales (§14). Una prueba compara exactamente dos publicaciones
 -- de la MISMA plataforma variando una sola cosa. La conclusión la escribe evaluate().
 CREATE TABLE IF NOT EXISTS ab_tests(
@@ -67,6 +88,18 @@ function migrate(db) {
       AND EXISTS (SELECT 1 FROM metrics WHERE metrics.post_id=posts.id)`).run();
     db.prepare("INSERT INTO settings(key,value) VALUES('migration_ux_v2','done')").run();
   }
+
+  const auditCols = db.prepare('PRAGMA table_info(post_classification_audit)').all().map(c => c.name);
+  if (!auditCols.includes('manually_modified_at')) db.exec('ALTER TABLE post_classification_audit ADD COLUMN manually_modified_at TEXT');
+  const generatedCols = db.prepare('PRAGMA table_info(generated)').all().map(c => c.name);
+  if (!generatedCols.includes('plan_idea_id')) db.exec('ALTER TABLE generated ADD COLUMN plan_idea_id INTEGER REFERENCES plan_ideas(id) ON DELETE SET NULL');
+  const ideaCols = db.prepare('PRAGMA table_info(plan_ideas)').all().map(c => c.name);
+  if (!ideaCols.includes('planned_for')) db.exec('ALTER TABLE plan_ideas ADD COLUMN planned_for TEXT');
+  if (!ideaCols.includes('source_url')) db.exec('ALTER TABLE plan_ideas ADD COLUMN source_url TEXT');
+  const siteCols = db.prepare('PRAGMA table_info(site_pages)').all().map(c => c.name);
+  if (!siteCols.includes('active')) db.exec('ALTER TABLE site_pages ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
+  const syncCols = db.prepare('PRAGMA table_info(site_syncs)').all().map(c => c.name);
+  if (!syncCols.includes('removed')) db.exec('ALTER TABLE site_syncs ADD COLUMN removed INTEGER NOT NULL DEFAULT 0');
 }
 
 function open(file) {

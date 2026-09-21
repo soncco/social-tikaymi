@@ -15,6 +15,9 @@ const scheduleMod = require('./modules/schedule');
 
 const { syncStats } = require('./modules/sync');
 const content = require('./modules/content');
+const planner = require('./modules/planner');
+const site = require('./modules/site');
+const editorialStrategy = require('./modules/editorial-strategy');
 
 const wrap = fn => (req, res, next) => { try { res.json(fn(req, res) ?? { ok: true }); } catch (e) { next(e); } };
 const wrapAsync = fn => async (req, res, next) => { try { res.json((await fn(req, res)) ?? { ok: true }); } catch (e) { next(e); } };
@@ -34,14 +37,14 @@ function api(db) {
   // Publicaciones (siempre con objetivo)
   r.get('/posts', wrap(() => db.prepare(`SELECT p.*, m.reach, m.plays, m.likes, m.saves,
     a.source AS classification_source, a.confidence AS classification_confidence,
-    a.rationale AS classification_rationale
+    a.rationale AS classification_rationale, a.manually_modified_at AS classification_modified_at
     FROM posts p LEFT JOIN metrics m ON m.post_id=p.id
     LEFT JOIN post_classification_audit a ON a.post_id=p.id
     ORDER BY fecha DESC, p.id DESC`).all()));
   r.post('/posts', wrap(req => ({ id: posts.create(db, req.body) })));
   r.put('/posts/bulk', wrap(req => {
     const body = req.body || {};
-    return posts.bulkUpdate(db, body.ids, body.fields || {});
+    return posts.bulkUpdate(db, body.ids, body.fields || {}, { overwrite: body.overwrite === true });
   }));
   r.put('/posts/:id', wrap(req => posts.update(db, req.params.id, req.body)));
   r.delete('/posts/:id', wrap(req => db.prepare('DELETE FROM posts WHERE id=?').run(req.params.id) && undefined));
@@ -119,12 +122,28 @@ function api(db) {
   }));
   r.delete('/assets/:id', wrap(req => db.prepare('DELETE FROM assets WHERE id=?').run(req.params.id) && undefined));
 
+  // Copia manual del sitio público; nunca autoriza automáticamente una página.
+  r.get('/site/status', wrap(() => site.status(db)));
+  r.get('/site/pages', wrap(req => site.list(db, req.query)));
+  r.post('/site/sync', wrapAsync(() => site.sync(db)));
+  r.put('/site/approve', wrap(req => site.approve(db, req.body?.url, req.body?.approved)));
+  r.get('/editorial-strategy', wrap(() => editorialStrategy.get(db)));
+  r.put('/editorial-strategy', wrap(req => editorialStrategy.update(db, req.body)));
+
   // Fase 2 — Generación con IA (siempre queda en revisión; aprobación humana manual)
   r.get('/generated', wrap(req => (req.query.post_id
     ? db.prepare('SELECT * FROM generated WHERE post_id=? ORDER BY id DESC').all(req.query.post_id)
     : db.prepare('SELECT * FROM generated ORDER BY id DESC').all())));
   r.post('/generate', wrapAsync(req => content.generate(db, req.body, {})));
+  r.post('/generate-package', wrapAsync(req => content.generatePackage(db, req.body, {})));
   r.put('/generated/:id', wrap(req => content.setEstado(db, req.params.id, req.body.estado)));
+
+  // Plan editorial: propuesta calculada con señales observadas y límites explícitos.
+  r.get('/plans/preview', wrap(req => planner.preview(db, req.query)));
+  r.get('/plans', wrap(() => db.prepare('SELECT * FROM editorial_plans ORDER BY id DESC').all()));
+  r.get('/plans/:id', wrap(req => planner.get(db, req.params.id)));
+  r.post('/plans', wrapAsync(req => planner.create(db, req.body)));
+  r.put('/plan-ideas/:id', wrap(req => planner.updateIdea(db, req.params.id, req.body)));
 
   // Clasificación automática de temas
   r.post('/themes/auto', wrap(req => autoClassify(db)));

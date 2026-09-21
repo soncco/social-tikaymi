@@ -37,11 +37,38 @@ test('clasificación masiva valida selección, campos y vocabularios', () => {
   assert.throws(() => posts.bulkUpdate(db, [1], { idioma:'fr' }), /inválido/);
 });
 
+test('clasificación rápida informa campos pendientes y no pisa valores previos salvo autorización', () => {
+  const db = open(':memory:');
+  importCsv(db, 'instagram', CSV);
+  const id = db.prepare('SELECT id FROM posts ORDER BY id').get().id;
+  db.prepare("UPDATE posts SET objetivo_negocio='reconocimiento' WHERE id=?").run(id);
+  const first = posts.bulkUpdate(db, [id], { objetivo_negocio:'confianza', cta:'Escribir por WhatsApp' });
+  assert.equal(first.updated, 1);
+  assert.equal(first.remaining, 1);
+  assert.equal(first.missing_by_field.objetivo_marketing, 1);
+  assert.equal(first.skipped_existing, 1);
+  assert.equal(db.prepare('SELECT objetivo_negocio FROM posts WHERE id=?').get(id).objetivo_negocio, 'reconocimiento');
+  const second = posts.bulkUpdate(db, [id], { objetivo_negocio:'confianza' }, { overwrite:true });
+  assert.equal(second.updated, 1);
+  assert.equal(db.prepare('SELECT objetivo_negocio FROM posts WHERE id=?').get(id).objetivo_negocio, 'confianza');
+});
+
+test('una corrección manual conserva la auditoría inicial y la marca como modificada', () => {
+  const db = open(':memory:');
+  importCsv(db, 'instagram', CSV);
+  const id = db.prepare('SELECT id FROM posts ORDER BY id').get().id;
+  db.prepare("INSERT INTO post_classification_audit(post_id,source,confidence,rationale) VALUES(?,'meta_caption','media','criterio inicial')").run(id);
+  posts.bulkUpdate(db, [id], { tema:'machu_picchu' });
+  const audit = db.prepare('SELECT rationale,manually_modified_at FROM post_classification_audit WHERE post_id=?').get(id);
+  assert.equal(audit.rationale, 'criterio inicial');
+  assert.ok(audit.manually_modified_at);
+});
+
 test('idioma mixto describe un histórico, pero una publicación nueva debe tener un idioma', () => {
   const db = open(':memory:');
   importCsv(db, 'instagram', CSV);
   const id = db.prepare('SELECT id FROM posts ORDER BY id').get().id;
-  posts.bulkUpdate(db, [id], { idioma:'mixto' });
+  posts.bulkUpdate(db, [id], { idioma:'mixto' }, { overwrite:true });
   assert.equal(db.prepare('SELECT idioma FROM posts WHERE id=?').get(id).idioma, 'mixto');
   assert.match(analyze(db).idioma.dato_origen, /es: 1 publicaciones/);
   assert.throws(() => posts.create(db, {

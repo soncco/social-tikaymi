@@ -2,6 +2,8 @@
 
 Fecha: 2026-09-21. Responsable: revisión editorial asistida por Codex.
 
+> Este documento registra la **clasificación inicial**. Posteriormente, el usuario aplicó valores masivos a nueve piezas pendientes; esos valores están en la base actual y pueden diferir de la tabla de abajo. La app marca las publicaciones auditadas que se editaron después y muestra que el motivo describe la inferencia original.
+
 ## Alcance y fuente
 
 Se revisaron los textos completos de 25 publicaciones de Instagram (`caption`) y las publicaciones correspondientes de la Página de Facebook (`message`) mediante la conexión Meta ya configurada, en modo solo lectura. La base local tenía solo la primera línea de varios textos. La clasificación se aplicó a 44 de las 50 publicaciones; seis piezas de Facebook no devolvieron texto ni tenían título.
@@ -53,7 +55,7 @@ Los ID separados por coma son versiones de Instagram y Facebook del mismo copy. 
 ## Lo que quedó pendiente
 
 - **ID 30, 38, 39, 40, 44 y 45:** Facebook no devolvió texto y en la base figuran como `Sin título`. No se les asignó tema, objetivo, audiencia, etapa, CTA ni idioma. Habría que ver la imagen o video original para decidir.
-- **ID 12, 14 y 43:** sí se clasificó contenido, pero no se inventó CTA. Siguen apareciendo como pendientes en la UI.
+- **ID 12, 14 y 43:** el texto original no contenía CTA explícito. En una edición masiva posterior se les asignó un CTA genérico, que no debe confundirse con el CTA histórico observado. Actualmente siguen pendientes por `Objetivo de marketing`.
 - **ID 1:** se respetaron los campos previamente definidos por el usuario (`confianza`, `testimonio`, `alcance`), aunque el texto por sí solo no acredita una reseña individual. Conviene revisar esa etiqueta antes de usar la pieza como ejemplo de testimonio.
 - **ID 41:** el propio copy declara que las imágenes fueron generadas con IA; no deben tratarse como fotografías reales ni copiarse a `assets` sin aprobación.
 - **Todas las piezas:** no había códigos de campaña por publicación ni leads atribuidos. No se pueden calcular conversiones históricas ni afirmar que una pieza produjo reservas.

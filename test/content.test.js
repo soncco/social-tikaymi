@@ -152,6 +152,8 @@ test('prompt_flow contempla clips de ~10 s, fotos por clip y voz/subtítulos', a
   assert.match(p, /subtítulos/);
   assert.match(p, /Killa no es obligatoria/);
   assert.match(cap.body.system, /inglés/);
+  assert.match(cap.body.system, /Deicy Ayala/);
+  assert.match(cap.body.system, /enciclopédico/);
 });
 
 test('testimonios: sin testimonio autorizado la IA no puede inventarlos', async () => {
