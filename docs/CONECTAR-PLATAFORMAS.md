@@ -27,36 +27,145 @@ Basta con **uno**. Puedes configurar varios y alternar desde la pestaña **IA** 
 Los modelos por defecto (`claude-sonnet-5`, `gpt-4o`, `deepseek-chat`) se pueden cambiar en la pestaña **IA** o con `ANTHROPIC_MODEL` / `OPENAI_MODEL` / `DEEPSEEK_MODEL`; verifica los nombres vigentes en la documentación de cada proveedor. Después reinicia con `npm start` y prueba en **Generar** (necesitas antes información aprobada). Nota: la calidad del resultado (idioma, formato JSON de carruseles, respeto de las reglas de no inventar datos) puede variar entre proveedores; revisa siempre antes de aprobar.
 
 ## 2. Meta (Instagram + Facebook)
-Requisitos previos: cuenta de Instagram **profesional** (Business o Creator) vinculada a una **Página de Facebook**, y acceso de administrador a esa Página.
-1. Ve a https://developers.facebook.com y crea una cuenta de desarrollador (con tu Facebook).
-2. **Mis apps → Crear app**, tipo *Business* (o el que ofrezca acceso a Instagram Graph API).
-3. Añade los productos **Instagram Graph API** (y **Facebook Login for Business** si lo pide).
-4. Permisos habituales para estadísticas: `instagram_basic`, `instagram_manage_insights`, `pages_show_list`, `pages_read_engagement`, `read_insights`.
-5. En modo *Desarrollo*, la app funciona con tu propia cuenta (admins/testers) **sin App Review**: suficiente para leer las estadísticas de Tikaymi. Para uso de terceros o publicar necesitas *App Review* y verificación del negocio.
-6. Genera un token de usuario con esos permisos (Graph API Explorer) y cámbialo por un **token de larga duración** (~60 días; hay que renovarlo). Mejor: token de sistema desde Business Manager (Usuarios del sistema).
-7. Guarda en `.env`: `META_APP_ID`, `META_APP_SECRET`, `META_ACCESS_TOKEN`, `META_IG_USER_ID`, `META_PAGE_ID`.
-8. Publicación automática (más adelante): Content Publishing API de Instagram, requiere permiso `instagram_content_publish` y App Review.
+
+**Requisitos previos (verifícalos antes de empezar)**
+- Cuenta de Instagram **profesional** (Business o Creator): en Instagram → Configuración → Tipo de cuenta y herramientas → *Cambiar a cuenta profesional*.
+- Una **Página de Facebook** de Tikaymi vinculada a esa cuenta de Instagram: en la Página → Configuración → *Cuentas vinculadas* → Instagram.
+- Tu usuario de Facebook es **administrador** de esa Página.
+
+Meta ofrece dos formas de acceso. Usa la **A** (con Facebook Login) porque también cubre las estadísticas de la Página de Facebook.
+
+**Paso 1 · Crear la cuenta de desarrollador y la app**
+1. Entra a https://developers.facebook.com e inicia sesión → *Comenzar* y acepta los términos.
+2. **Mis apps → Crear app**. Elige el caso de uso que hable de Instagram/gestionar mensajes y contenido (los nombres cambian; si te pide tipo, elige **Empresa/Business**).
+3. Nombre: `Tikaymi Lab`. Correo de contacto: el tuyo.
+4. En el panel de la app → **Agregar productos**: añade *Instagram* (API de Instagram) y *Inicio de sesión con Facebook para empresas*.
+
+**Paso 2 · Permisos** (Facebook Login): `instagram_basic`, `instagram_manage_insights`, `pages_show_list`, `pages_read_engagement`, `read_insights`. (Con *Instagram Login* los equivalentes se llaman `instagram_business_basic` e `instagram_business_manage_insights`.)
+- Mientras la app esté en modo **Desarrollo** funciona con las cuentas que tengan rol en la app (tú como admin) **sin App Review**. Es suficiente para leer los datos de Tikaymi.
+
+**Paso 3 · Obtener el token**
+1. Abre https://developers.facebook.com/tools/explorer → elige tu app → *Generar token de acceso de usuario* → marca los permisos del paso 2 → acepta y selecciona la Página y la cuenta de Instagram cuando lo pida.
+2. Cambia por un token de **larga duración** (~60 días):
+   ```
+   GET https://graph.facebook.com/v21.0/oauth/access_token
+       ?grant_type=fb_exchange_token&client_id=APP_ID
+       &client_secret=APP_SECRET&fb_exchange_token=TOKEN_CORTO
+   ```
+   (Ajusta `v21.0` a la versión vigente. Ejecútalo desde tu terminal con `curl`; no lo pegues en sitios ajenos.)
+   El App ID y App Secret están en **Configuración de la app → Básica**.
+3. Consigue tus IDs:
+   ```
+   GET https://graph.facebook.com/v21.0/me/accounts?access_token=TOKEN      → id de la Página (PAGE_ID)
+   GET https://graph.facebook.com/v21.0/PAGE_ID?fields=instagram_business_account&access_token=TOKEN
+                                                                            → IG_USER_ID
+   ```
+
+**Paso 4 · Probar que ves datos**
+```
+GET https://graph.facebook.com/v21.0/IG_USER_ID/media?fields=id,caption,media_type,timestamp,like_count,comments_count&access_token=TOKEN
+GET https://graph.facebook.com/v21.0/ID_DE_UN_MEDIA/insights?metric=reach,saved,shares&access_token=TOKEN
+```
+- Endpoint de estadísticas por publicación: `GET /<MEDIA_ID>/insights`. La documentación oficial cita `engagement`, `impressions` y `reach` como ejemplo.
+- **Los nombres de métricas cambian por versión** (Meta retiró varias, p. ej. `video_views` en contenido que no es Reel y `profile_views`, desde la v21). Antes de programar el conector, comprueba en el Graph API Explorer qué métricas acepta cada tipo de publicación (Reel, imagen, carrusel) y usa las que respondan. No están verificadas aquí: **[verificar]** alcance, guardados, compartidos, reproducciones y tiempo medio de visualización de Reels.
+
+**Paso 5 · Guardar en `.env`** (nunca en código): `META_APP_ID`, `META_APP_SECRET`, `META_ACCESS_TOKEN`, `META_PAGE_ID`, `META_IG_USER_ID`. Anota la fecha: el token de larga duración caduca (~60 días) y hay que renovarlo. Alternativa sin caducidad práctica: **usuario del sistema** en Business Manager (business.facebook.com → Configuración → Usuarios → Usuarios del sistema → generar token con los permisos).
+
+**Publicación automática (más adelante)**: requiere `instagram_content_publish` y **App Review** más verificación del negocio; no la necesitas para leer estadísticas.
+
+**Lo que aporta Meta al sistema**: alcance, interacciones, guardados, compartidos y, según la métrica disponible, reproducciones. Las **visitas al perfil, clics y conversaciones** suelen venir mejor por CSV de Business Suite.
 
 ## 3. TikTok
-1. Crea cuenta en https://developers.tiktok.com y **Manage apps → Connect an app**.
-2. Añade productos: **Login Kit** y **Display API** (lectura de tus videos y sus estadísticas básicas: vistas, likes, comentarios, compartidos). Scopes típicos: `user.info.basic`, `video.list`.
-3. Completa la ficha de la app (descripción, URLs de privacidad/términos, redirect URI) y envíala a **revisión**; la aprobación puede tardar.
-4. Para analítica más profunda (retención, etc.) revisa si aplica **TikTok Business/Marketing API** con una cuenta Business; puede exigir aprobación adicional.
-5. Publicar por API (**Content Posting API**) exige auditoría; sin ella los videos se limitan a privados. Empieza por CSV y por publicar manualmente.
-6. Guarda en `.env`: `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` y los tokens que obtengas por OAuth.
+
+**Qué API te sirve y su límite real (verificado en la documentación oficial):** la *Display API* solo devuelve por video: `id`, `title`, `video_description`, `create_time`, `duration`, `share_url`, `view_count`, `like_count`, `comment_count`, `share_count`. **No entrega retención, alcance, guardados ni visitas al perfil.** Solo lista videos **públicos**. Para esas métricas seguirás usando el **CSV de TikTok Studio**. La API te ahorra el CSV solo para vistas/likes/comentarios/compartidos.
+
+**Paso 1 · Cuenta y app**
+1. https://developers.tiktok.com → *Log in* con la cuenta de TikTok de Tikaymi → completa el registro de desarrollador.
+2. **Manage apps → Connect an app** (o *Create app*). Rellena: nombre, icono, categoría, descripción de para qué usas los datos (analítica propia de Tikaymi), **URL de política de privacidad** y **términos** (puedes usar páginas de tikaymi.com).
+3. En la app → **Add products**: agrega **Login Kit** y **Display API**.
+4. En *Login Kit* configura la **Redirect URI**. Para pruebas locales usa una URL que controles, p. ej. `https://tikaymi.com/callback` (o el servicio que te permita recibir el `code`).
+5. En *Scopes* solicita `user.info.basic` y `video.list`.
+6. **Envía la app a revisión** (la documentación exige aprobación de Login Kit y de la Display API). Anota el **Client Key** y el **Client Secret** (Configuración de la app).
+
+**Paso 2 · Autorizar y obtener tokens** (tras la aprobación, o con tu cuenta en modo sandbox si el portal lo ofrece)
+1. Abre en el navegador (una sola línea):
+   `https://www.tiktok.com/v2/auth/authorize/?client_key=CLIENT_KEY&scope=user.info.basic,video.list&response_type=code&redirect_uri=REDIRECT_URI&state=abc123`
+2. Acepta con la cuenta de Tikaymi; te redirige a tu URI con `?code=...`. Copia el `code`.
+3. Cámbialo por tokens:
+   ```
+   POST https://open.tiktokapis.com/v2/oauth/token/
+   Content-Type: application/x-www-form-urlencoded
+   client_key=...&client_secret=...&code=CODE&grant_type=authorization_code&redirect_uri=REDIRECT_URI
+   ```
+   Devuelve `access_token` (dura **24 h**) y `refresh_token` (dura **1 año**), más `open_id`. El conector debe renovar el access token con el refresh token automáticamente.
+
+**Paso 3 · Probar**
+```
+POST https://open.tiktokapis.com/v2/video/list/?fields=id,title,create_time,view_count,like_count,comment_count,share_count
+Authorization: Bearer ACCESS_TOKEN
+Content-Type: application/json
+{"max_count": 20}
+```
+Máximo 20 videos por página; pagina con `cursor` mientras `has_more` sea `true`.
+
+**Paso 4 · Guardar en `.env`**: `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `TIKTOK_REFRESH_TOKEN`.
+
+**Publicar por API (Content Posting API)**: exige auditoría adicional; hasta pasarla los videos publicados quedan restringidos. No es prioridad.
 
 ## 4. YouTube (Shorts)
-1. Entra a https://console.cloud.google.com y crea un proyecto (ej. `tikaymi-lab`).
-2. **APIs y servicios → Biblioteca**: habilita **YouTube Data API v3** y **YouTube Analytics API**.
-3. **Pantalla de consentimiento OAuth**: tipo *Externo*, agrega tu correo como usuario de prueba.
-4. **Credenciales → Crear credenciales → ID de cliente OAuth** (tipo *Aplicación web* o *Escritorio*).
-5. Scopes de solo lectura: `youtube.readonly` y `yt-analytics.readonly`. (Publicar requiere `youtube.upload`; los proyectos sin auditoría dejan los videos subidos como privados.)
-6. Nota: en modo *Testing* los refresh tokens caducan a los 7 días; pasa la app a *En producción* para que duren. Hay una cuota diaria (10 000 unidades por defecto).
-7. Guarda en `.env`: `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`, `YOUTUBE_CHANNEL_ID`.
 
-## 5. Orden sugerido
-1. Hoy: CSV de las tres plataformas + una clave de IA.
-2. Meta (mayor volumen de datos y la más simple en modo desarrollo).
-3. YouTube.
-4. TikTok (la revisión es la más lenta).
-Cuando tengas las credenciales de una plataforma, avísame y se implementa su conector siguiendo `src/adapters/README.md` (lectura de estadísticas primero; publicación automática después, siempre con aprobación humana previa).
+**Paso 1 · Proyecto y APIs**
+1. https://console.cloud.google.com → selector de proyecto → **Proyecto nuevo** → `tikaymi-lab` → Crear.
+2. Menú ☰ → **APIs y servicios → Biblioteca**. Busca y pulsa **Habilitar** en: **YouTube Data API v3** y **YouTube Analytics API**.
+
+**Paso 2 · Pantalla de consentimiento**
+1. **APIs y servicios → Pantalla de consentimiento de OAuth** (o *Google Auth Platform*) → tipo **Externo** → nombre de la app `Tikaymi Lab`, correo de soporte y de contacto.
+2. **Usuarios de prueba**: agrega el Gmail que administra el canal de Tikaymi.
+3. Importante: en estado **Testing** el refresh token **caduca a los 7 días** (confirmado en la documentación de Google). Para que dure, pasa la app a **En producción** (los scopes de solo lectura mostrarán una advertencia de "app no verificada"; puedes continuar como usuario propietario).
+
+**Paso 3 · Credenciales OAuth**
+1. **Credenciales → Crear credenciales → ID de cliente de OAuth** → tipo **Aplicación web**.
+2. En *URI de redireccionamiento autorizados* agrega `https://developers.google.com/oauthplayground`.
+3. Guarda el **Client ID** y el **Client Secret**.
+
+**Paso 4 · Obtener el refresh token (OAuth Playground)**
+1. Abre https://developers.google.com/oauthplayground → engranaje ⚙ → marca **Use your own OAuth credentials** → pega Client ID y Secret.
+2. En el paso 1 escribe estos scopes y pulsa *Authorize APIs*:
+   - `https://www.googleapis.com/auth/youtube.readonly`
+   - `https://www.googleapis.com/auth/yt-analytics.readonly`
+3. Inicia sesión con la cuenta dueña del canal (elige el canal de Tikaymi si tienes varios) y acepta.
+4. Paso 2 → **Exchange authorization code for tokens** → copia el **Refresh token**.
+
+**Paso 5 · Probar**
+1. Con un access token (Playground o renovado con el refresh token):
+   ```
+   GET https://youtubeanalytics.googleapis.com/v2/reports
+       ?ids=channel==MINE&startDate=2026-08-01&endDate=2026-09-20
+       &metrics=views,averageViewPercentage,likes,comments,shares,estimatedMinutesWatched
+       &dimensions=video&sort=-views&maxResults=50
+   Authorization: Bearer ACCESS_TOKEN
+   ```
+2. Los títulos y el formato Short se obtienen con la Data API (`videos.list`) usando los IDs devueltos. `averageViewPercentage` es la retención que el sistema guarda en `retention` (% promedio visto; no comparable con otras plataformas).
+
+**Paso 6 · Guardar en `.env`**: `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`. Cuota por defecto de la Data API: 10 000 unidades/día (leer estadísticas cuesta muy poco). Subir videos por API (`youtube.upload`) en proyectos sin auditoría deja los videos como privados.
+
+## 5. Cómo verificar que todo quedó bien
+Marca cada casilla antes de pedirme el conector:
+- [ ] Puedo ejecutar la prueba (curl) de la plataforma y veo datos de **mis** publicaciones.
+- [ ] Tengo guardadas en `.env` todas las variables de su sección y `.env` **no** está en git (`git status` no lo muestra).
+- [ ] Anoté cuándo caduca cada token (Meta ~60 días; TikTok access 24 h / refresh 1 año; YouTube: refresh 7 días si la app sigue en Testing).
+
+**Seguridad:** no me envíes tokens ni secretos por el chat; ponlos tú directamente en `.env`. Dime únicamente qué pruebas funcionaron y qué error viste (sin el token).
+
+## 6. Orden recomendado
+1. Hoy: CSV de las tres plataformas + una clave de IA (secciones 0 y 1).
+2. YouTube (la más directa y con retención real por video).
+3. Meta (más datos, pero con más pasos y métricas por verificar).
+4. TikTok (revisión lenta y datos limitados; el CSV sigue siendo necesario para retención).
+Cuando una prueba funcione, dímelo y se implementa su conector siguiendo `src/adapters/README.md`.
+
+## 7. Fuentes consultadas
+- TikTok Display API: https://developers.tiktok.com/doc/display-api-get-started · https://developers.tiktok.com/doc/tiktok-api-v2-video-list · https://developers.tiktok.com/doc/tiktok-api-v2-video-object
+- YouTube Analytics: https://developers.google.com/youtube/analytics/reference/reports/query
+- Google OAuth (caducidad en Testing): https://developers.google.com/identity/protocols/oauth2
+- Instagram Insights: https://developers.facebook.com/documentation/instagram-platform/insights
