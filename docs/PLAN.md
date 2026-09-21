@@ -36,7 +36,7 @@ Auth · objetivos · posts con objetivo obligatorio · importación CSV por adap
 ## Riesgos técnicos
 - Cada plataforma define retención/alcance distinto → adaptadores separados, nunca sumar entre plataformas.
 - Pocos datos → confianza explícita; sin conversión no se atribuye.
-- APIs oficiales requieren aprobación de apps (Meta/TikTok) → Fase 3; CSV primero.
+- APIs oficiales requieren aprobación de apps (Meta/TikTok) → Fase 3; CSV primero. Actualización: la **lectura** de Instagram por API ya funciona en modo Desarrollo sin App Review (solo cuentas con rol en la app); la aprobación sólo hace falta para publicar o para cuentas de terceros.
 - Fotos del constructor exigen URLs con CORS.
 
 ## Avance

@@ -5,7 +5,7 @@ let K = {}, tab = 'panel';
 const FAM = { atencion: 'Atención', intencion: 'Intención', negocio: 'Negocio' };
 const CONF = { datos_insuficientes: 'Datos insuficientes', senal_inicial: 'Señal inicial', patron_probable: 'Patrón probable', patron_confirmado: 'Patrón confirmado' };
 const TIPO = { observado: 'Observado', interpretacion: 'Interpretación', recomendacion: 'Recomendación', hipotesis: 'Hipótesis' };
-const TABS = { panel: 'Panel', objetivos: 'Objetivos', posts: 'Publicaciones', importar: 'Importar CSV', leads: 'Leads', aprendizajes: 'Aprendizajes', calendario: 'Calendario', enlaces: 'Enlaces', carrusel: 'Carrusel', info: 'Info aprobada', generar: 'Generar', ia: 'IA' };
+const TABS = { panel: 'Panel', objetivos: 'Objetivos', posts: 'Publicaciones', importar: 'Importar / Sincronizar', leads: 'Leads', aprendizajes: 'Aprendizajes', calendario: 'Calendario', enlaces: 'Enlaces', carrusel: 'Carrusel', info: 'Info aprobada', generar: 'Generar', ia: 'IA' };
 const LBL = k => String(k).replace(/_/g, ' ');
 const opts = (list, sel) => list.map(o => `<option value="${esc(o)}"${o === sel ? ' selected' : ''}>${esc(LBL(o))}</option>`).join('');
 
@@ -151,7 +151,15 @@ async function posts() {
 
 /* ---------- Importar ---------- */
 async function importar() {
-  $('#view').innerHTML = `<h2>Importar CSV</h2><form class="card form" id="f"><label>Plataforma<select name="p">${opts(K.PLATAFORMAS)}</select></label><label>Archivo CSV<input type="file" name="file" accept=".csv,text/csv" required></label><div><button>Importar</button></div></form><pre id="out" class="card"></pre>`;
+  $('#view').innerHTML = `<h2>Sincronizar por API (Meta)</h2><div class="card form"><label>Plataforma<select id="syncp"><option value="instagram">Instagram</option><option value="facebook">Facebook (Página)</option></select></label><p>Trae las últimas publicaciones y sus métricas desde Meta. Solo lee; no publica nada. Cada publicación se consulta como mucho una vez cada 20 h.</p><label><input type="checkbox" id="force"> Forzar (ignorar el límite de 20 h)</label><div><button id="sync">Sincronizar</button></div><p id="syncmsg"></p></div><h2>Importar CSV</h2><form class="card form" id="f"><label>Plataforma<select name="p">${opts(K.PLATAFORMAS)}</select></label><label>Archivo CSV<input type="file" name="file" accept=".csv,text/csv" required></label><div><button>Importar</button></div></form><pre id="out" class="card"></pre>`;
+  $('#sync').onclick = guard(async () => {
+    const b = $('#sync'); b.disabled = true; b.textContent = 'Sincronizando…';
+    try {
+      const r = await api('/sync/' + $('#syncp').value, 'POST', { force: $('#force').checked });
+      $('#syncmsg').textContent = `${r.ok ? 'Listo' : 'Con errores'}: ${r.nuevos} nuevas, ${r.actualizados} actualizadas, ${r.omitidos} omitidas.` + (r.token?.dias_restantes != null ? ` Token vigente ${r.token.dias_restantes} días.` : '') + (r.aviso ? ' ⚠ ' + r.aviso : '');
+      $('#out').textContent = JSON.stringify(r, null, 2); toast(r.ok ? 'Sincronización completa' : 'Sincronización con errores');
+    } finally { b.disabled = false; b.textContent = 'Sincronizar'; }
+  });
   $('#f').onsubmit = guard(async e => {
     e.preventDefault();
     const f = e.target.file.files[0]; if (!f) return;

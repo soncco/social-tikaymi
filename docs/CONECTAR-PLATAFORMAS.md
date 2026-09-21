@@ -67,11 +67,19 @@ GET https://graph.facebook.com/v21.0/IG_USER_ID/media?fields=id,caption,media_ty
 GET https://graph.facebook.com/v21.0/ID_DE_UN_MEDIA/insights?metric=reach,saved,shares&access_token=TOKEN
 ```
 - Endpoint de estadísticas por publicación: `GET /<MEDIA_ID>/insights`. La documentación oficial cita `engagement`, `impressions` y `reach` como ejemplo.
-- **Los nombres de métricas cambian por versión** (Meta retiró varias, p. ej. `video_views` en contenido que no es Reel y `profile_views`, desde la v21). Antes de programar el conector, comprueba en el Graph API Explorer qué métricas acepta cada tipo de publicación (Reel, imagen, carrusel) y usa las que respondan. No están verificadas aquí: **[verificar]** alcance, guardados, compartidos, reproducciones y tiempo medio de visualización de Reels.
+- **Los nombres de métricas cambian por versión.** Verificado el 2026-09-20 con la API v23.0 en un carrusel y un Reel de @tikaymi: funcionan `reach`, `views`, `saved`, `shares`, `likes`, `comments`, `total_interactions` y `profile_visits`. **No** funcionan `impressions` (retirada desde la v22) ni `plays` (ahora es `views`). `ig_reels_avg_watch_time` solo vale en Reels y su unidad no es un porcentaje, por eso la retención queda vacía. El conector guarda `views` como reproducciones en Reels/video y como impresiones en el resto.
+- Si `me/accounts` devuelve lista vacía no es un error: los IDs de la Página y de Instagram salen de `debug_token` → `granular_scopes[].target_ids`.
+- **Con el modo Desarrollo no hace falta enviar la app a revisión** (la pantalla "Solicitudes de revisión de apps" se ignora) mientras solo uses tu propia cuenta.
 
-**Paso 5 · Guardar en `.env`** (nunca en código): `META_APP_ID`, `META_APP_SECRET`, `META_ACCESS_TOKEN`, `META_PAGE_ID`, `META_IG_USER_ID`. Anota la fecha: el token de larga duración caduca (~60 días) y hay que renovarlo. Alternativa sin caducidad práctica: **usuario del sistema** en Business Manager (business.facebook.com → Configuración → Usuarios → Usuarios del sistema → generar token con los permisos).
+**Paso 5 · Guardar en `.env`** (nunca en código): `META_APP_ID`, `META_APP_SECRET`, `META_ACCESS_TOKEN`, `META_PAGE_ID`, `META_IG_USER_ID`. Anota la fecha: el token de larga duración caduca (~60 días) y hay que renovarlo. Ojo: cada variable va en su propia línea (si el archivo no termina en salto de línea, al añadir otra con `>>` se pega a la anterior). Alternativa sin caducidad práctica: **usuario del sistema** en Business Manager (business.facebook.com → Configuración → Usuarios → Usuarios del sistema → generar token con los permisos).
 
 **Publicación automática (más adelante)**: requiere `instagram_content_publish` y **App Review** más verificación del negocio; no la necesitas para leer estadísticas.
+
+**Renovar el token**: `npm run meta:renew` (con el token aún vigente) lo cambia por uno nuevo y reescribe solo `META_ACCESS_TOKEN` en `.env`, sin mostrarlo. Si ya caducó, genera uno nuevo en el Graph API Explorer y repite el paso 3.
+
+**Facebook (Página)**: no necesita permisos extra. Leer sus publicaciones exige un token de *Página*, que el conector pide solo con `GET /{PAGE_ID}?fields=access_token` a partir del token de usuario (basta con `META_PAGE_ID` en `.env`). Métricas verificadas en v23.0: `post_media_view`, `post_total_media_view_unique`, `post_clicks`, más reacciones/comentarios/compartidos como campos del post. No valen `post_impressions_unique` ni `page_fans`. Los compartidos ausentes en la respuesta cuentan como 0.
+
+**Sincronizar desde la app**: `POST /api/sync/instagram` (o `/facebook`) (acción manual, solo lectura) trae las últimas publicaciones y sus métricas. Las nuevas entran como `sin_clasificar`/`borrador`; las existentes conservan sus objetivos y no se pisan con vacíos los datos que vengan del CSV. Consulta cada publicación como mucho una vez cada 20 h (`{"force":true}` lo salta) y la respuesta incluye el estado del token y un aviso si caduca en 7 días o menos.
 
 **Lo que aporta Meta al sistema**: alcance, interacciones, guardados, compartidos y, según la métrica disponible, reproducciones. Las **visitas al perfil, clics y conversaciones** suelen venir mejor por CSV de Business Suite.
 

@@ -8,7 +8,8 @@
   },
   "scripts": {
     "test": "node --test test/",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "meta:renew": "node scripts/meta-renew.js"
   },
   "keywords": [],
   "author": "",

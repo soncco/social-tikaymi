@@ -1,10 +1,12 @@
 # Adaptadores de plataforma
 
-Este directorio contiene hoy **sólo adaptadores de importación CSV** (`meta.js`, `tiktok.js`,
-`youtube.js`): convierten una exportación manual de cada plataforma en filas de `posts` + `metrics`.
+Este directorio contiene adaptadores de importación CSV (`meta.js`, `tiktok.js`, `youtube.js`): convierten
+una exportación manual de cada plataforma en filas de `posts` + `metrics`. **`meta.js` ya implementa además el
+conector oficial de lectura para Instagram y Facebook (Página)** (`listRecent`, `fetchStats`, `tokenStatus`; orquestado por
+`src/modules/sync.js`). `publish` y los conectores de TikTok/YouTube siguen sin implementar.
 
 Este documento define el **contrato** que deberá cumplir un futuro conector oficial por API.
-Nada de lo descrito aquí está implementado: es la especificación para cuando existan las
+Sólo `fetchStats` de Meta está implementado: el resto es la especificación para cuando existan las
 credenciales y la aprobación de cada app (Inicial.MD §11, §14 Fase 3).
 
 ## Contrato
@@ -28,6 +30,11 @@ async function publish(post, { credentials, dryRun, signal }) → {
   ok: boolean, external_id, url, published_at, errors: [...]
 }
 ```
+
+Extensión de Meta: `listRecent({credentials, limit})` devuelve `{external_id, titulo, fecha, formato}` de las
+publicaciones recientes; `sync.js` crea con eso los posts nuevos (`sin_clasificar`) y luego llama a `fetchStats`
+(que por sí solo nunca crea posts). `tokenStatus()` informa de la caducidad. `views` se guarda como `plays` en
+Reels/video y como `impressions` en el resto, porque Meta retiró `impressions` y `plays` (v22+).
 
 ### Reglas obligatorias
 

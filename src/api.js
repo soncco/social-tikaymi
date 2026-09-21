@@ -13,6 +13,7 @@ const abtests = require('./modules/abtests');
 const { weeklyDigest } = require('./modules/digest');
 const scheduleMod = require('./modules/schedule');
 
+const { syncStats } = require('./modules/sync');
 const content = require('./modules/content');
 
 const wrap = fn => (req, res, next) => { try { res.json(fn(req, res) ?? { ok: true }); } catch (e) { next(e); } };
@@ -79,6 +80,9 @@ function api(db) {
     }
     return result;
   }));
+
+  // Sincronizar estadísticas por API oficial: instagram | facebook (acción manual, sólo lectura)
+  r.post('/sync/:plataforma', wrapAsync(req => syncStats(db, req.params.plataforma, { force: !!req.body?.force })));
 
   // Fase 2 — Biblioteca de información aprobada de Tikaymi
   r.get('/approved-info', wrap(() => db.prepare('SELECT * FROM approved_info ORDER BY id DESC').all()));
