@@ -21,7 +21,7 @@ async function syncStats(db, plataforma, { force = false, limit = 25, fetchImpl,
   const sel = db.prepare('SELECT p.id, m.captured_at FROM posts p LEFT JOIN metrics m ON m.post_id=p.id WHERE p.plataforma=? AND p.external_id=?');
   const ins = db.prepare(`INSERT INTO posts(plataforma, external_id, titulo, fecha, formato, objetivo_negocio, objetivo_marketing,
     objetivo_contenido, audiencia, etapa_embudo, cta, metrica_principal, idioma, estado)
-    VALUES(?,?,?,?,?,'sin_clasificar','sin_clasificar','sin_clasificar','sin_clasificar','sin_clasificar','sin_clasificar','sin_clasificar','es','borrador')`);
+    VALUES(?,?,?,?,?,'sin_clasificar','sin_clasificar','sin_clasificar','sin_clasificar','sin_clasificar','sin_clasificar','sin_clasificar','es','publicado')`);
   // COALESCE: lo que la API no devuelve no pisa datos ya importados por CSV (p. ej. clics).
   const up = db.prepare(`INSERT INTO metrics(post_id, ${METRICS.join(',')}) VALUES(?, ${METRICS.map(() => '?').join(',')})
     ON CONFLICT(post_id) DO UPDATE SET ${METRICS.map(m => `${m}=COALESCE(excluded.${m}, ${m})`).join(', ')}, captured_at=CURRENT_TIMESTAMP`);

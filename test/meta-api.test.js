@@ -55,8 +55,8 @@ test('syncStats crea posts sin_clasificar, guarda métricas y avisa de caducidad
   const a = await syncStats(db, 'instagram', { credentials: CRED, fetchImpl: fakeGraph() });
   assert.equal(a.nuevos, 2); assert.equal(a.ok, true);
   assert.match(a.aviso, /caduca en/);
-  const p = db.prepare("SELECT p.titulo, p.formato, p.objetivo_negocio, m.reach FROM posts p JOIN metrics m ON m.post_id=p.id WHERE external_id='C1'").get();
-  assert.deepEqual({ ...p }, { titulo: 'Machu Picchu', formato: 'carousel', objetivo_negocio: 'sin_clasificar', reach: 10 });
+  const p = db.prepare("SELECT p.titulo, p.formato, p.objetivo_negocio, p.estado, m.reach FROM posts p JOIN metrics m ON m.post_id=p.id WHERE external_id='C1'").get();
+  assert.deepEqual({ ...p }, { titulo: 'Machu Picchu', formato: 'carousel', objetivo_negocio: 'sin_clasificar', estado: 'publicado', reach: 10 });
   const b = await syncStats(db, 'instagram', { credentials: CRED, fetchImpl: fakeGraph() });
   assert.equal(b.omitidos, 2); assert.equal(b.nuevos, 0);
   const c = await syncStats(db, 'instagram', { credentials: CRED, fetchImpl: fakeGraph(), force: true });

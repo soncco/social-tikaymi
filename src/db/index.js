@@ -42,6 +42,11 @@ CREATE TABLE IF NOT EXISTS ab_tests(
   post_a INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
   post_b INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
   creado TEXT DEFAULT CURRENT_TIMESTAMP, conclusion TEXT);
+-- Auditoría de clasificación retrospectiva: indica qué fue inferido del copy.
+CREATE TABLE IF NOT EXISTS post_classification_audit(
+  post_id INTEGER PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE,
+  source TEXT NOT NULL, confidence TEXT NOT NULL, rationale TEXT NOT NULL,
+  classified_at TEXT DEFAULT CURRENT_TIMESTAMP);
 `;
 
 // Migraciones seguras: columnas añadidas después de la primera versión de la base.
@@ -50,6 +55,18 @@ function migrate(db) {
   const cols = db.prepare('PRAGMA table_info(posts)').all().map(c => c.name);
   // §11: programación manual (recordatorio), nunca publicación automática.
   if (!cols.includes('programado_para')) db.exec('ALTER TABLE posts ADD COLUMN programado_para TEXT');
+
+  // v2: las primeras versiones confundían "sin clasificar" con "borrador".
+  // Sólo migramos piezas externas con métricas y todos sus metadatos todavía
+  // intactos en sin_clasificar; así no tocamos borradores creados por personas.
+  const uxV2 = db.prepare("SELECT value FROM settings WHERE key='migration_ux_v2'").get();
+  if (!uxV2) {
+    db.prepare(`UPDATE posts SET estado='publicado'
+      WHERE estado='borrador' AND external_id IS NOT NULL
+      AND objetivo_negocio='sin_clasificar'
+      AND EXISTS (SELECT 1 FROM metrics WHERE metrics.post_id=posts.id)`).run();
+    db.prepare("INSERT INTO settings(key,value) VALUES('migration_ux_v2','done')").run();
+  }
 }
 
 function open(file) {

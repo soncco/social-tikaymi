@@ -80,7 +80,9 @@ function importCsv(db, plataforma, csvText) {
           'sin_clasificar', // cta
           'sin_clasificar', // metrica_principal
           'es', // idioma default
-          'borrador' // estado - shows as pending in UI
+          // Un CSV de estadísticas describe una pieza que ya fue publicada. La
+          // clasificación pendiente es independiente de su estado editorial.
+          'publicado'
         );
 
         const postId = r.lastInsertRowid;

@@ -5,6 +5,9 @@ module.exports = {
   ETAPAS: ['alcance', 'interaccion', 'consideracion', 'intencion', 'consulta', 'cotizacion', 'reserva'],
   OBJETIVOS_CONTENIDO: ['explicar', 'comparar', 'demostrar', 'responder', 'inspirar', 'producto', 'testimonio'],
   IDIOMAS: ['es', 'en'],
+  // Sólo para clasificar piezas históricas bilingües; las piezas nuevas y la IA
+  // siguen exigiendo un único idioma de IDIOMAS.
+  IDIOMAS_HISTORICOS: ['es', 'en', 'mixto', 'sin_clasificar'],
   LEAD_ESTADOS: ['nuevo', 'contactado', 'calificado', 'cotizado', 'reservado', 'perdido', 'sin_respuesta'],
   POST_ESTADOS: ['borrador', 'revision', 'aprobado', 'programado', 'publicado', 'analizado'],
   // Fase 2 (secciones 8, 9, 10)

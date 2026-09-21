@@ -1,5 +1,7 @@
 # Proyecto: Tikaymi Marketing Intelligence & Content Lab
 
+> **Documento de requerimientos original.** Se conserva como contrato funcional. La arquitectura de experiencia vigente está en `docs/PLAN.md`, el estado real en `docs/PROGRESS.md` y las instrucciones para futuras sesiones de Claude Code en `CLAUDE.md`.
+
 Construye una aplicación web para Tikaymi, agencia de viajes especializada en Cusco y Perú.
 
 La aplicación no debe ser principalmente un generador de publicaciones. Su función central es analizar datos reales de redes sociales y relacionarlos con objetivos comerciales. La IA debe generar recomendaciones y contenidos únicamente después de analizar esos datos.

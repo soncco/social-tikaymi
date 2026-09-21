@@ -1,52 +1,94 @@
-# Manual de uso — Tikaymi Marketing Intelligence & Content Lab
+# Manual de uso — Tikaymi Marketing Intelligence
 
-## 1. Iniciar el sistema
-Requisitos: Node.js 20 o superior.
+## Qué hace la aplicación
+
+Tikaymi Marketing Intelligence ayuda a responder tres preguntas:
+
+1. ¿Qué está pasando con nuestro contenido?
+2. ¿Qué evidencia tenemos sobre intención o resultados comerciales?
+3. ¿Cuál es la siguiente acción útil?
+
+No es principalmente un generador de publicaciones. La generación aparece dentro del flujo de contenido y solo utiliza información autorizada.
+
+## Primer ingreso
+
+La pantalla **Inicio** muestra el estado de preparación y una única “siguiente mejor acción”. Para una instalación nueva, el orden recomendado es:
+
+1. **Configuración → Objetivo del período:** define el resultado comercial y una meta.
+2. **Configuración → Fuentes de datos:** sincroniza Meta o importa un CSV.
+3. **Contenido → Publicaciones:** revisa y clasifica las publicaciones importadas. La clasificación rápida permite aplicar campos comunes a varias piezas.
+4. **Consultas → Enlaces y rastreo:** crea códigos o enlaces diferentes para reconocer el origen de cada consulta.
+5. **Consultas → Consultas y estados:** registra contactos y actualízalos hasta cotizado, reservado o perdido.
+6. **Configuración → Biblioteca aprobada:** carga servicios, precios, testimonios, fotos y videos reales.
+7. **Rendimiento:** revisa recomendaciones, comparaciones, alertas y aprendizajes.
+8. **Contenido → Crear con IA:** convierte una publicación contextualizada en un borrador y apruébalo manualmente.
+
+## Las cinco áreas
+
+### Inicio
+
+Resume publicaciones analizadas, consultas, cotizaciones y reservas. El estado de preparación explica qué falta, y la siguiente acción lleva directamente a la pantalla apropiada.
+
+### Rendimiento
+
+- **Resumen e insights:** recomendaciones con dato de origen, objetivo, CTA, métrica de éxito, limitaciones y confianza.
+- **Comparaciones:** resultados por plataforma, formato, idioma, tema y CTA. Las barras usan el valor normalizado y muestran cobertura cuando existe.
+- **Alertas y aprendizaje:** problemas de calidad de datos, cohortes y registro de aprendizajes.
+
+Las métricas de plataformas distintas nunca se suman. Los likes no deciden qué publicación es mejor.
+
+### Contenido
+
+- **Publicaciones:** lista de piezas y clasificación masiva. Una pieza importada ya se considera `publicado`; puede estar publicada y a la vez pendiente de clasificación.
+- **Crear con IA:** genera copys, guiones, prompts, carruseles, WhatsApp o propuestas A/B. Solo muestra publicaciones con el contexto mínimo completo.
+- **Calendario editorial:** flujo borrador → revisión → aprobado → programado → publicado → analizado. La aprobación es humana.
+
+El JSON de carruseles ya no se edita manualmente en la UI. Un carrusel generado y aprobado puede descargarse para el constructor que vive en `carruseles-claude-design/`.
+
+### Consultas
+
+- **Consultas y estados:** registra fuente, viaje, viajeros, notas y avance comercial.
+- **Enlaces y rastreo:** genera UTM y enlaces de WhatsApp con un código de campaña. El mismo código debe registrarse cuando llega el contacto.
+
+Sin consultas atribuidas, la aplicación declara explícitamente que no puede medir conversión.
+
+### Configuración
+
+Agrupa objetivo del período, sincronización/importación, biblioteca aprobada y proveedor de IA. Las claves de APIs solo viven en `.env`.
+
+## Estados y clasificación
+
+El estado editorial y la calidad de clasificación son conceptos diferentes:
+
+- Una publicación sincronizada desde una red social entra como `publicado` porque ya existe en la plataforma.
+- Puede conservar campos `sin_clasificar`; aun así participa en el resumen por plataforma.
+- Las piezas históricas clasificadas por criterio editorial muestran **Inferida**. En **Editar** se explica el motivo; no equivale al brief original aprobado.
+- `mixto` documenta copys antiguos en español e inglés, pero no está permitido al crear una pieza nueva.
+- Para compararla por objetivo, audiencia, tema o CTA, completa esos campos mediante clasificación rápida o edición individual.
+- Un contenido nuevo creado dentro de la app comienza como `borrador`.
+
+## Instalación y respaldo
+
+Requiere Node.js 20 o superior.
 
 ```bash
 npm install
-cp .env.example .env      # luego edita .env
-npm start                 # http://localhost:3000
+cp .env.example .env
+npm start
+npm test
 ```
 
-En `.env` define como mínimo:
-- `ADMIN_PASSWORD`: la contraseña con la que entras.
-- `SESSION_SECRET`: un texto largo y aleatorio (p. ej. `openssl rand -hex 32`).
-- Una clave de IA (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` o `DEEPSEEK_API_KEY`) para generar contenido. En la pestaña **IA** eliges qué proveedor y modelo se usan; el sistema solo guarda esa elección, nunca las claves (ver `docs/CONECTAR-PLATAFORMAS.md`).
+Configura al menos `ADMIN_PASSWORD` y `SESSION_SECRET`. Para generar contenido agrega una de `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` o `DEEPSEEK_API_KEY` y selecciona el proveedor en Configuración.
 
-`.env` está en `.gitignore`: nunca se sube al repositorio. Los datos viven en `data/tikaymi.db` (haz copia de ese archivo para respaldar). `npm test` ejecuta las pruebas.
+Los datos viven en `data/tikaymi.db`; respaldar ese archivo es suficiente. Consulta [CONECTAR-PLATAFORMAS.md](CONECTAR-PLATAFORMAS.md) para las credenciales de Meta.
 
-## 2. Flujo de trabajo recomendado
-Sigue este orden; el sistema está pensado para que no se genere ni analice nada sin objetivo.
+## Problemas frecuentes
 
-1. **Objetivos**: registra el objetivo de negocio del período (consulta calificada, cotización, reserva…).
-2. **Info aprobada**: carga servicios, precios, testimonios verificables y fotos que la IA puede usar. Marca "autorizado" solo lo que puede usarse públicamente. Sin esto la IA no genera nada.
-3. **Publicaciones**: crea cada pieza con objetivo de negocio, de marketing y de contenido, audiencia, etapa del embudo, CTA, métrica principal, plataforma e idioma. Si falta uno, no se guarda.
-4. **Enlaces**: genera el enlace con UTM y el enlace de WhatsApp con el código de campaña (ej. `HUMANTAY`). Úsalo en la bio, descripción o CTA de la publicación.
-5. **Publicar** manualmente (por ahora) en la red social. En **Calendario** mueve la pieza por los estados: borrador → revisión → aprobado (pide confirmación humana) → programado → publicado → analizado.
-6. **Importar CSV**: exporta las estadísticas de la plataforma (ver guía) y súbelas en "Importar CSV". Las publicaciones nuevas llegan como *sin clasificar*: complétales los objetivos en "Publicaciones". El botón **Clasificar temas** del Panel asigna el tema por palabras clave del título.
-7. **Leads**: cada vez que llegue una consulta, regístrala con su código de campaña (así se atribuye a la publicación). Cambia su estado: nuevo → contactado → calificado → cotizado → reservado / perdido / sin respuesta.
-8. **Panel**: revisa las métricas separadas en atención, intención y negocio, la conversión y las recomendaciones. Cada conclusión indica su nivel de confianza; con pocos datos verás "datos insuficientes" o hipótesis, no recomendaciones definitivas. Descarga el informe (.md) desde el Panel.
-9. **Generar**: elige una publicación, el tipo (copy, guion, prompt para Google Flow, carrusel, WhatsApp, A/B) y el idioma (es o en; nunca mezclados). El resultado queda en *revisión*: **Aprobar** o **Rechazar** manualmente.
-10. **Aprendizajes**: anota qué funcionó y qué no; alimenta la siguiente decisión.
-
-## 3. Carruseles
-- Los archivos originales de Claude Design están en `carruseles-claude-design/`. El editor es `Tikaymi - Constructor de Carruseles.html`: ábrelo con doble clic en el navegador (no requiere servidor).
-- Desde el sistema: pestaña **Carrusel** (o "Descargar JSON" en un carrusel generado y aprobado) descarga un `.json`. En el constructor usa **Cargar JSON** para abrirlo, ajusta las fotos (URLs públicas con CORS, p. ej. Cloudinary) y exporta PNG/JPG.
-- Regla: 3 a 5 diapositivas, un solo idioma por pieza.
-
-## 4. Otras funciones
-- **Pruebas A/B** (API `/api/abtests`): compara dos publicaciones de la misma plataforma cambiando una variable; decide por consultas/intención, nunca por likes.
-- **Alertas y cohortes** en el Panel: publicaciones sin métricas, leads sin contactar, período sin objetivo.
-- **Resumen semanal**: `GET /api/digest.md`. Para automatizarlo, llámalo desde `cron` (ver cabecera de `src/modules/digest.js`).
-- **Programación**: `GET /api/schedule.ics` exporta un calendario iCal para recordatorios manuales. La publicación automática aún no existe.
-
-## 5. Problemas frecuentes
-| Síntoma | Causa |
+| Síntoma | Qué revisar |
 |---|---|
-| Error al arrancar "Define ADMIN_PASSWORD y SESSION_SECRET" | Falta `.env` |
-| Generar devuelve 503 | Falta la clave del proveedor activo (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` o `DEEPSEEK_API_KEY`), o cambia de proveedor en la pestaña IA |
-| Generar devuelve 422 | No hay información aprobada y autorizada |
-| Generar devuelve 400 | La publicación no tiene objetivo/audiencia/etapa/CTA/métrica/idioma |
-| El CSV no importa | Columnas no reconocidas; abre un issue con los encabezados reales para ajustar el adaptador |
-| Una publicación importada no puede avanzar de estado | Aún está "sin clasificar": complétale los objetivos |
+| El Inicio indica publicaciones pendientes | Ve a Contenido y usa clasificación rápida. |
+| No hay conversión | Registra consultas con el mismo código usado en el CTA. |
+| Generar responde 422 | Falta información autorizada en Biblioteca aprobada. |
+| Generar responde 503 | Falta la clave del proveedor activo en `.env`. |
+| Un CSV no importa | Revisa plataforma y encabezados; cada adaptador reconoce formatos concretos. |
+| Meta dejó de sincronizar | Revisa el aviso de expiración y ejecuta `npm run meta:renew`. |

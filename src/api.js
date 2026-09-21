@@ -32,8 +32,17 @@ function api(db) {
   }));
 
   // Publicaciones (siempre con objetivo)
-  r.get('/posts', wrap(() => db.prepare('SELECT p.*, m.reach, m.plays, m.likes, m.saves FROM posts p LEFT JOIN metrics m ON m.post_id=p.id ORDER BY fecha DESC, p.id DESC').all()));
+  r.get('/posts', wrap(() => db.prepare(`SELECT p.*, m.reach, m.plays, m.likes, m.saves,
+    a.source AS classification_source, a.confidence AS classification_confidence,
+    a.rationale AS classification_rationale
+    FROM posts p LEFT JOIN metrics m ON m.post_id=p.id
+    LEFT JOIN post_classification_audit a ON a.post_id=p.id
+    ORDER BY fecha DESC, p.id DESC`).all()));
   r.post('/posts', wrap(req => ({ id: posts.create(db, req.body) })));
+  r.put('/posts/bulk', wrap(req => {
+    const body = req.body || {};
+    return posts.bulkUpdate(db, body.ids, body.fields || {});
+  }));
   r.put('/posts/:id', wrap(req => posts.update(db, req.params.id, req.body)));
   r.delete('/posts/:id', wrap(req => db.prepare('DELETE FROM posts WHERE id=?').run(req.params.id) && undefined));
 

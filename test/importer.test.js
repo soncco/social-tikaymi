@@ -69,7 +69,7 @@ test('Importer: new posts created with sin_clasificar defaults', () => {
   assert.equal(post.cta, 'sin_clasificar');
   assert.equal(post.metrica_principal, 'sin_clasificar');
   assert.equal(post.idioma, 'es');
-  assert.equal(post.estado, 'borrador');
+  assert.equal(post.estado, 'publicado');
 
   // Verify metrics were stored
   const metrics = db.prepare('SELECT * FROM metrics WHERE post_id = ?').get(post.id);

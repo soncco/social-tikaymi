@@ -1,9 +1,36 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tikaymi Lab</title><link rel="stylesheet" href="app.css"></head>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#123f3b">
+  <title>Tikaymi · Marketing Intelligence</title>
+  <link rel="stylesheet" href="app.css">
+</head>
 <body>
-<header id="top" hidden><img src="tikaymi-logo.png" alt="Tikaymi" class="logo"><nav id="tabs"></nav><button id="logout" class="ghost">Salir</button></header>
-<div id="msg" role="status"></div>
-<main id="view"></main>
-<script src="app.js"></script>
-</body></html>
+  <div id="shell" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="#inicio" aria-label="Tikaymi inicio">
+        <img src="tikaymi-logo.png" alt="Tikaymi">
+        <span><b>Tikaymi</b><small>Marketing Intelligence</small></span>
+      </a>
+      <nav id="tabs" aria-label="Navegación principal"></nav>
+      <div class="sidebar-foot">
+        <p>Decide con datos.<br>Crea con propósito.</p>
+        <button id="logout" class="nav-link danger">Salir</button>
+      </div>
+    </aside>
+    <div class="workspace">
+      <header class="mobile-head">
+        <button id="menu" class="icon-btn" aria-label="Abrir menú">☰</button>
+        <img src="tikaymi-logo.png" alt="Tikaymi">
+        <span>Tikaymi Lab</span>
+      </header>
+      <div id="msg" role="status" aria-live="polite"></div>
+      <main id="view"></main>
+    </div>
+  </div>
+  <main id="login-view"></main>
+  <script src="app.js"></script>
+</body>
+</html>
