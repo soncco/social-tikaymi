@@ -60,7 +60,7 @@ Si la IA no devuelve JSON válido o falta un campo, el plan no se guarda. El men
 
 Los atajos Instagram + Facebook y TikTok + YouTube Shorts indican destinos editoriales de una idea. No publican en esas redes ni unen sus métricas. Por ahora, si necesitas registrar publicaciones individuales en cada plataforma, hazlo en **Publicaciones**.
 
-El JSON de carruseles ya no se edita manualmente en la UI. Un carrusel generado y aprobado puede descargarse para el constructor que vive en `carruseles-claude-design/`.
+El constructor que vive en `carruseles-claude-design/` permite cargar un archivo JSON/YAML o pegar directamente su contenido con **Pegar JSON / YAML**. El parser adapta archivos antiguos con `titulo`/`texto` y alias conocidos de layouts. La IA recibe el esquema específico del constructor: un itinerario usa una entrada por día, una ficha separa sus datos en `meta`, y una galería usa una lista de fotos.
 
 ### Consultas
 
@@ -78,6 +78,8 @@ En **Estrategia editorial** puedes ajustar el producto prioritario, su URL, las 
 En **Sitio web**, pulsa **Actualizar desde Tikaymi.com** cuando cambies la web. Se leen el sitemap y las páginas indicadas, se guardan localmente y se muestran el resultado y la fecha. El planificador consulta esa copia, no la web en cada planificación. Español e inglés se guardan por separado. Una página nueva queda pendiente; si una página aprobada cambia, se retira su aprobación hasta que vuelvas a revisarla. Si una URL desaparece del sitemap, queda archivada y ya no se usa, sin borrar el registro. Las páginas con fallo de descarga conservan su copia anterior.
 
 Para autorizar contenido factual en los borradores, abre la ficha, contrástala con la página original y marca **Aprobada para redactar contenido**. Precios, inclusiones, horarios y disponibilidad merecen revisión especial. La IA solo recibe páginas aprobadas relacionadas con la idea, además de la Biblioteca aprobada. La sincronización no crea ni modifica publicaciones de redes sociales.
+
+La pantalla también permite seleccionar páginas visibles y aprobarlas por lote. El botón **Aprobar todos los tours y blogs (ES + EN)** aplica la aprobación a todas las fichas activas de esos dos tipos en ambos idiomas; no incluye eventos, destinos ni páginas institucionales. La aprobación se retira automáticamente si una actualización cambia el contenido.
 
 ## Estados y clasificación
 

@@ -134,4 +134,29 @@ function approve(db, url, approved) {
   return { url, approved:approved === true };
 }
 
-module.exports = { SITEMAP, parseSitemap, extract, sync, status, list, approve };
+// Aprobación explícita de varias fichas. Se acepta una lista de URLs o filtros
+// controlados por tipo/idioma; nunca se aprueba contenido archivado.
+function approveBatch(db, { urls, kinds, languages, approved = true } = {}) {
+  const allowedKinds = ['tour','blog','evento','destino','institucional'];
+  const allowedLanguages = ['es','en'];
+  const selectedKinds = kinds?.length ? [...new Set(kinds)] : null;
+  const selectedLanguages = languages?.length ? [...new Set(languages)] : null;
+  if (selectedKinds && selectedKinds.some(k => !allowedKinds.includes(k))) throw err('Tipo de página inválido');
+  if (selectedLanguages && selectedLanguages.some(l => !allowedLanguages.includes(l))) throw err('Idioma inválido');
+  const list = urls?.length ? [...new Set(urls)] : null;
+  if (!list && !selectedKinds && !selectedLanguages) throw err('Indica URLs o filtros para aprobar páginas');
+  if (list && list.length > MAX_PAGES) throw err(`No se pueden aprobar más de ${MAX_PAGES} páginas por lote`);
+  let result;
+  if (list) {
+    const placeholders = list.map(() => '?').join(',');
+    result = db.prepare(`UPDATE site_pages SET approved=? WHERE active=1 AND url IN (${placeholders})`).run(approved === true ? 1 : 0, ...list);
+  } else {
+    const where = ['active=1']; const params = [];
+    if (selectedKinds) { where.push(`kind IN (${selectedKinds.map(() => '?').join(',')})`); params.push(...selectedKinds); }
+    if (selectedLanguages) { where.push(`lang IN (${selectedLanguages.map(() => '?').join(',')})`); params.push(...selectedLanguages); }
+    result = db.prepare(`UPDATE site_pages SET approved=? WHERE ${where.join(' AND ')}`).run(approved === true ? 1 : 0, ...params);
+  }
+  return { approved: approved === true, updated: result.changes };
+}
+
+module.exports = { SITEMAP, parseSitemap, extract, sync, status, list, approve, approveBatch };

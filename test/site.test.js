@@ -101,3 +101,18 @@ test('API del sitio expone la copia local y guarda aprobación autenticada', asy
     assert.equal(db.prepare('SELECT approved FROM site_pages WHERE url=?').get(URL).approved, 1);
   } finally { server.close(); db.close(); }
 });
+
+test('aprobación por lote filtra tours y blogs en ambos idiomas', async () => {
+  const db = open(':memory:');
+  const add = db.prepare('INSERT INTO site_pages(url,lang,kind,title,content_hash) VALUES(?,?,?,?,?)');
+  add.run('https://tikaymi.com/tour/a/','es','tour','Tour A','a');
+  add.run('https://tikaymi.com/en/tour/a/','en','tour','Tour A','b');
+  add.run('https://tikaymi.com/blog/a/','es','blog','Blog A','c');
+  add.run('https://tikaymi.com/en/blog/a/','en','blog','Blog A','d');
+  add.run('https://tikaymi.com/event/a/','es','evento','Evento A','e');
+  assert.deepEqual(site.approveBatch(db, { kinds:['tour','blog'], languages:['es','en'] }), { approved:true, updated:4 });
+  assert.equal(db.prepare("SELECT sum(approved) n FROM site_pages WHERE kind IN ('tour','blog')").get().n, 4);
+  assert.equal(db.prepare("SELECT approved FROM site_pages WHERE kind='evento'").get().approved, 0);
+  assert.deepEqual(site.approveBatch(db, { urls:['https://tikaymi.com/tour/a/'], approved:false }), { approved:false, updated:1 });
+  db.close();
+});

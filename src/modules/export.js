@@ -6,6 +6,33 @@ const LAYOUTS = {
   informativo: ['portada', 'portada-foto', 'portada-editorial', 'cifras', 'pasos', 'columnas', 'foto-overlay', 'qa-panel', 'cierre'],
 };
 
+// Alias inequívocos que algunos modelos producen al separar identificadores.
+const LAYOUT_ALIASES = {
+  'bueno-saber-lo': 'bueno-saberlo',
+  'bueno_saberlo': 'bueno-saberlo',
+  'bueno-saber': 'bueno-saberlo',
+};
+
+function normalizeSlideData(layout, data = {}) {
+  const d = { ...data };
+  const title = d.titulo;
+  const text = d.texto;
+  if (title) {
+    if (['portada','portada-foto','portada-editorial'].includes(layout) && !d.h1) d.h1 = title;
+    else if (!d.h2 && !['cita','galeria','cifras','pasos','qa-panel'].includes(layout)) d.h2 = title;
+    else if (['cifras','pasos'].includes(layout) && !d.h2) d.h2 = title;
+  }
+  if (text && !d.body && !['itinerario','bueno-saberlo','cita','cifras','pasos','qa-panel'].includes(layout)) d.body = text;
+  if (layout === 'itinerario' && text && !Array.isArray(d.route)) d.route = [{ d:'Itinerario', t:text }];
+  if (layout === 'bueno-saberlo' && text && !Array.isArray(d.notes)) d.notes = [{ title:'Nota', text }];
+  if (layout === 'cita' && text && !d.quote) d.quote = text;
+  if (layout === 'pasos' && text && !Array.isArray(d.steps)) d.steps = [{ title:'Paso', text }];
+  if (layout === 'qa-panel' && text && !Array.isArray(d.qas)) d.qas = [{ q:'Pregunta', a:text }];
+  delete d.titulo;
+  delete d.texto;
+  return d;
+}
+
 // Devuelve el JSON que el constructor carga con "Cargar JSON" (app/version/tipo/slides[{layout,data}]).
 // El constructor completa los campos faltantes con sus valores por defecto, por eso solo se valida tipo y layout.
 function carouselExport({ tipo, slides }) {
@@ -13,8 +40,14 @@ function carouselExport({ tipo, slides }) {
   if (!LAYOUTS[tipo]) throw bad(`tipo inválido: ${tipo}`);
   if (!Array.isArray(slides) || !slides.length) throw bad('slides vacío');
   if (slides.length > 7) throw bad('máximo razonable 3-5 diapositivas (tope 7)');
-  slides.forEach((s, i) => { if (!LAYOUTS[tipo].includes(s?.layout)) throw bad(`diapositiva ${i + 1}: layout inválido "${s?.layout}"`); });
-  return { app: 'tikaymi-constructor-carruseles', version: 1, tipo, exportadoEn: new Date().toISOString(), slides: slides.map(s => ({ layout: s.layout, data: s.data || {} })) };
+  slides.forEach((s, i) => {
+    const normalized = LAYOUT_ALIASES[s?.layout] || s?.layout;
+    if (!LAYOUTS[tipo].includes(normalized)) throw bad(`diapositiva ${i + 1}: layout inválido "${s?.layout}"`);
+  });
+  return { app: 'tikaymi-constructor-carruseles', version: 1, tipo, exportadoEn: new Date().toISOString(), slides: slides.map(s => {
+    const layout = LAYOUT_ALIASES[s.layout] || s.layout;
+    return { layout, data: normalizeSlideData(layout, s.data || {}) };
+  }) };
 }
 
 const fmt = v => (v == null ? '—' : typeof v === 'number' ? +v.toFixed(2) : v);
@@ -38,4 +71,4 @@ function reportMarkdown(db, opts) {
   return L.join('\n') + '\n';
 }
 
-module.exports = { carouselExport, reportMarkdown, LAYOUTS };
+module.exports = { carouselExport, reportMarkdown, LAYOUTS, LAYOUT_ALIASES, normalizeSlideData };

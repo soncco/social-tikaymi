@@ -35,12 +35,27 @@ const INSTRUCCIONES = {
   ab: 'Propone una prueba A/B: variante A, variante B, qué cambia exactamente, hipótesis y métrica de éxito. Una sola variable por prueba.',
 };
 
+const CARRUSEL_LAYOUT_GUIDE = [
+  'producto: portada={eyebrow,h1,imageUrl,caption,note,swipe} para portada con foto lateral; portada-foto={eyebrow,h1,body,imageUrl,note,swipe} para foto a sangre; portada-editorial={badge,eyebrow,h1,body,imageUrl,caption,note,swipe} para apertura editorial sin foto obligatoria.',
+  'producto: ficha={eyebrow,h2,meta:[{k,v}],body}; usa meta para duración/servicio/precio solo si están aprobados, nunca inventes valores.',
+  'producto: itinerario={eyebrow,h2,imageUrl,caption,note,route:[{d,t}]}; route debe tener un objeto por día o etapa (puede tener varios, no lo resumas en un solo texto).',
+  'producto: foto-sangre={eyebrow,h2,body,imageUrl,note}; split|foto-arriba|foto-abajo={eyebrow,h2,body,imageUrl,caption,note}; elige según quieras dividir foto/texto, foto arriba o foto abajo.',
+  'producto: galeria={eyebrow,h2,photos:[{imageUrl,tag,note}]} con 2 o 3 fotos; cita={quote,by,imageUrl,note} solo con testimonio real aprobado; antes-despues={eyebrow,h2,beforeUrl,afterUrl,beforeTag,afterTag,beforeNote,afterNote,body} solo si existe un antes/después real.',
+  'producto: incluido={eyebrow,h2,items:[string]}; bueno-saberlo={eyebrow,h2,notes:[{title,text}],body}; cierre={eyebrow,h2,body,ctaText,ctaUrl,contact}. El cierre debe ser la última diapositiva.',
+  'informativo: portada, portada-foto y portada-editorial usan los mismos campos de portada; cifras={eyebrow,h2,facts:[{v,k}]} solo con cifras aprobadas; pasos={eyebrow,h2,steps:[{title,text}]} con un objeto por paso.',
+  'informativo: columnas={eyebrow,h2,colA:{heading,items:[string]},colB:{heading,items:[string]}} para sí/no; foto-overlay={eyebrow,h2,body,imageUrl,note}; qa-panel={eyebrow,qas:[{q,a}],panelLabel,panelText} para preguntas y recomendación; cierre usa el esquema de producto.',
+];
+
 const instruccionCarrusel = () => [
   'Devuelve ÚNICAMENTE un JSON válido, sin texto alrededor y sin bloques de código, con esta forma:',
-  '{"tipo":"producto|informativo","slides":[{"layout":"<id>","data":{"titulo":"...","texto":"..."}}]}',
+  '{"tipo":"producto|informativo","slides":[{"layout":"<id>","data":{<campos exactos del layout>}}]}',
   'Usa entre 3 y 5 diapositivas (nunca 7 por defecto) y cada una debe aportar una idea nueva.',
-  `Layouts válidos para "producto": ${LAYOUTS.producto.join(', ')}.`,
-  `Layouts válidos para "informativo": ${LAYOUTS.informativo.join(', ')}.`,
+  `Layouts válidos para "producto": ${LAYOUTS.producto.join(', ')}. Copia los identificadores exactamente; no los traduzcas ni insertes guiones.`,
+  `Layouts válidos para "informativo": ${LAYOUTS.informativo.join(', ')}. Copia los identificadores exactamente; no los traduzcas ni insertes guiones.`,
+  ...CARRUSEL_LAYOUT_GUIDE,
+  'No uses campos genéricos titulo/texto: el constructor los ignora. En itinerario separa cada día en route; en ficha separa datos en meta; en bueno-saberlo separa notas en notes.',
+  'Usa únicamente URLs de imágenes que aparezcan en Recursos disponibles; si no hay una imagen aprobada, deja imageUrl vacío y conserva note como marcador. No inventes URLs.',
+  'No uses layouts de informativo dentro de producto ni layouts de producto dentro de informativo. Elige producto para vender/explicar un tour y informativo para resolver una pregunta general.',
 ].join('\n');
 
 function reglasTestimonios(info) {

@@ -127,6 +127,7 @@ function api(db) {
   r.get('/site/pages', wrap(req => site.list(db, req.query)));
   r.post('/site/sync', wrapAsync(() => site.sync(db)));
   r.put('/site/approve', wrap(req => site.approve(db, req.body?.url, req.body?.approved)));
+  r.put('/site/approve-batch', wrap(req => site.approveBatch(db, req.body || {})));
   r.get('/editorial-strategy', wrap(() => editorialStrategy.get(db)));
   r.put('/editorial-strategy', wrap(req => editorialStrategy.update(db, req.body)));
 

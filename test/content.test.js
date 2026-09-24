@@ -124,6 +124,15 @@ test('carrusel: valida 3-5 diapositivas con los layouts del constructor', async 
   assert.equal(out.estado, 'revision');
 });
 
+test('prompt de carrusel exige el esquema real de cada layout', async () => {
+  const d = db();
+  aprobada(d);
+  const cap = {};
+  await conClave(() => content.generate(d, { post_id:1, tipo:'carrusel', idioma:'es' }, { fetchImpl: fakeFetch('{"tipo":"informativo","slides":[{"layout":"portada","data":{"h1":"x"}},{"layout":"cierre","data":{"h2":"y"}}]}', cap) }));
+  assert.match(cap.body.messages[0].content, /route:\[\{d,t\}\]/);
+  assert.match(cap.body.messages[0].content, /No uses campos genéricos titulo\/texto/);
+});
+
 test('registra el límite 429 de la API', async () => {
   const d = db();
   aprobada(d);
