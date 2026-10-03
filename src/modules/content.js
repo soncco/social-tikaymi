@@ -11,24 +11,35 @@ const err = (status, message) => Object.assign(new Error(message), { status });
 
 const PROHIBIDO = 'precios, disponibilidad, horarios, servicios, resultados, reseñas, testimonios, estadísticas ni condiciones de viaje';
 
+const VIDEO_GUIDANCE = [
+  'Módulo de guiones Tikaymi: crea un video ejecutable, no una publicación automática. Una pieza tiene una sola idea principal, objetivo de negocio, problema/deseo del viajero, CTA, métrica y duración.',
+  'Google Flow Omni trabaja en clips de aproximadamente 10 segundos: usa EXACTAMENTE 3, 4 o 5 clips (30–50 segundos en total), nunca 6 ni más. Cada clip tiene una función narrativa clara: atención, problema/deseo, explicación, logística, objeción, confianza o CTA.',
+  'Cada clip debe indicar duración, función, visual, movimiento de cámara, voz o diálogo exacto, texto en pantalla opcional como capa de edición y fotografía de referencia. Incluye formato vertical 9:16, continuidad, idioma/acento, sincronización labial si alguien habla y restricciones negativas. El texto en pantalla/subtítulo se añade durante la edición: no pongas letras ni palabras dentro de la imagen generada por Flow.',
+  'El video no debe ser comercial o informativo completamente silencioso: usa diálogo visible, voz en off, conversación, texto acompañado de voz, testimonio autorizado o sonido ambiente con función narrativa explícita. Si es voz en off, indica que es narradora externa y que nadie visible mueve los labios.',
+  'Killa no es obligatoria. Decide “Killa: sí/no” según el tema y varía la estructura entre piezas: pregunta, documental, recorrido, problema-solución, comparación, narración sobre fotos, testimonio o guía visible. No repitas automáticamente “Killa abre, imágenes, Killa cierra”. Si Killa aparece, especifica cuándo habla, idioma, diálogo y continuidad; no inventes su biografía, apariencia, vestuario o voz si no están aprobados. Si aparece una guía mujer, debe ser Killa u otra mujer; no muestres un guía varón hablando con voz femenina.',
+  'Cada fotografía es referencia principal: conserva lugar, arquitectura, personas y ambiente; usa movimiento sutil; no cambies destinos, inventes actividades ni atribuyas frases a viajeros reales. Usa solo recursos disponibles y asigna fotos a clips concretos.',
+  'Entrega en este orden: A) concepto general (título, objetivo, audiencia, mensaje, estructura, duración, CTA, métrica y razón); B) guion completo hablado sin instrucciones técnicas; C) tabla de clips; D) prompt individual de cada clip; E) edición final (orden, sobreimpresos, subtítulos, música, voz, transición, logo, CTA y advertencias); F) copy de publicación, CTA, enlace/WhatsApp, hashtags moderados y advertencias.',
+  'Antes de responder revisa: primer clip atractivo, cada clip aporta algo nuevo, audio en todos los clips, voz coherente con quien habla, Killa no repetitiva, fotos correctamente asignadas, continuidad y cero datos inventados. Todo debe estar en el idioma de la pieza.',
+].join('\n');
+
+function sanitizeCopy(text) {
+  return String(text || '').replace(/```(?:text|markdown)?/gi, '')
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/\*{1,3}([^*\n]+)\*{1,3}/g, '$1')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^\s*---+\s*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n').trim();
+}
+
 // Instrucciones por tipo de pieza (§9).
 const INSTRUCCIONES = {
-  copy: 'Escribe un copy para la publicación con gancho, cuerpo breve y el CTA indicado. Devuelve solo el texto.',
+  copy: 'Escribe un copy listo para pegar directamente en la plataforma, con gancho, cuerpo breve y el CTA indicado. Devuelve solo texto plano: no uses Markdown, asteriscos, almohadillas, encabezados, viñetas Markdown, bloques de código ni etiquetas técnicas como «Caption» o «Post text». Incluye 2–4 emojis relevantes y naturales, sin ponerlos en cada frase. Adapta la cantidad y tono a la plataforma; conserva los emojis también en la versión de cada red.',
   guion: [
-    'Escribe el guion del reel. Reglas obligatorias:',
-    '- Google Flow Omni genera clips de ~10 segundos: divide el guion en clips de ese largo.',
-    '- Cada clip indica qué fotografía de referencia usa (solo de la lista de recursos disponibles).',
-    '- El reel no puede ser silencioso: planifica voz, diálogo o narración y subtítulos explícitos.',
-    '- Killa no es obligatoria: úsala solo si aporta valor y nunca siempre en apertura y cierre.',
-    '- Varía la estructura narrativa; no repitas siempre apertura, explicación y cierre.',
+    'Escribe el guion completo del reel siguiendo el módulo de guiones Tikaymi. Incluye las secciones A–F en el orden indicado y no inventes información.',
   ].join('\n'),
   prompt_flow: [
-    'Escribe los prompts para Google Flow. Reglas obligatorias:',
-    '- Un prompt por clip de ~10 segundos.',
-    '- Indica en cada clip la fotografía de referencia (solo de la lista de recursos disponibles).',
-    '- Planifica voz/narración y subtítulos por clip: el reel no debe quedar silencioso.',
-    '- Killa no es obligatoria en apertura ni cierre; inclúyela solo si aporta valor.',
-    '- Varía la estructura narrativa entre clips.',
+    'Escribe la tabla de clips y los prompts individuales D del módulo de guiones Tikaymi. Devuelve un prompt por clip de ~10 segundos, con visual, cámara, personaje, voz, texto, foto de referencia, continuidad y restricciones.',
   ].join('\n'),
   carrusel: null, // se construye abajo con los layouts reales del constructor
   whatsapp: 'Escribe respuestas para WhatsApp acordes al CTA y a la etapa del embudo. Solo información aprobada; si falta un dato, indica que se consultará con el equipo.',
@@ -54,6 +65,8 @@ const instruccionCarrusel = () => [
   `Layouts válidos para "informativo": ${LAYOUTS.informativo.join(', ')}. Copia los identificadores exactamente; no los traduzcas ni insertes guiones.`,
   ...CARRUSEL_LAYOUT_GUIDE,
   'No uses campos genéricos titulo/texto: el constructor los ignora. En itinerario separa cada día en route; en ficha separa datos en meta; en bueno-saberlo separa notas en notes.',
+  'En todos los layouts que tengan eyebrow, genera una etiqueta breve y específica (2–5 palabras) para la sección, por ejemplo «Antes de reservar», «Paso a paso», «Preguntas frecuentes» o «Incluido». Nunca dejes eyebrow vacío y nunca escribas literalmente «Etiqueta».',
+  'Todo texto del carrusel —incluidos eyebrow, badge, títulos, notas, CTA, etiquetas de listas y contacto— debe estar en el idioma de la pieza. No mezcles español e inglés.',
   'Usa únicamente URLs de imágenes que aparezcan en Recursos disponibles; si no hay una imagen aprobada, deja imageUrl vacío y conserva note como marcador. No inventes URLs.',
   'No uses layouts de informativo dentro de producto ni layouts de producto dentro de informativo. Elige producto para vender/explicar un tour y informativo para resolver una pregunta general.',
 ].join('\n');
@@ -118,6 +131,7 @@ function buildPrompt(db, { post, tipo, idioma }) {
   else L.push('- No hay fotografías ni videos disponibles: no describas material visual inexistente.');
   L.push('', '## Resumen del análisis de datos', resumenAnalisis(db));
   L.push('', '## Qué debes generar', tipo === 'carrusel' ? instruccionCarrusel() : INSTRUCCIONES[tipo]);
+  if (tipo === 'guion' || tipo === 'prompt_flow') L.push('', '## Módulo de guiones para videos cortos', VIDEO_GUIDANCE);
   if (tipo === 'copy' && post.plataformas_destino?.length > 1) L.push('Entrega una versión de copy claramente etiquetada para cada plataforma destino; conserva la misma idea central y ajusta solo lo necesario al formato de cada red.');
   L.push('', '## Restricciones', `No inventes ${PROHIBIDO}.`, reglasTestimonios(info));
 
@@ -125,6 +139,7 @@ function buildPrompt(db, { post, tipo, idioma }) {
 }
 
 const quitarCercas = t => t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+const videoClipCount = text => new Set([...String(text || '').matchAll(/(?:^|\n)\s*(?:#{1,6}\s*)?(?:clip|escena)\s*\d+/gim)].map(m => m[0].match(/(?:clip|escena)\s*(\d+)/i)?.[1])).size;
 
 async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma } = {}, { fetchImpl, save = true } = {}) {
   if (!C.CONTENIDO_TIPOS.includes(tipo)) throw err(400, `tipo inválido: ${tipo}. Válidos: ${C.CONTENIDO_TIPOS.join(', ')}`);
@@ -148,7 +163,13 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma } = {},
   const partes = buildPrompt(db, { post, tipo, idioma: lang });
 
   // (c) Llamada a la API de Anthropic.
-  const texto = (await llm.complete(db, partes, fetchImpl)).texto;
+  let respuesta = await llm.complete(db, partes, fetchImpl);
+  if ((tipo === 'guion' || tipo === 'prompt_flow') && videoClipCount(respuesta.texto) > 5) {
+    console.error(`[content] ${tipo}: la IA devolvió ${videoClipCount(respuesta.texto)} clips; se solicitó una corrección automática`);
+    respuesta = await llm.complete(db, { ...partes, prompt: `${partes.prompt}\n\nCORRECCIÓN OBLIGATORIA: tu respuesta anterior excedió el límite. Reescribe toda la respuesta con EXACTAMENTE 3, 4 o 5 clips numerados; jamás 6. Mantén el formato solicitado y no agregues un sexto clip.` }, fetchImpl);
+    if (videoClipCount(respuesta.texto) > 5) throw err(502, `La IA devolvió ${videoClipCount(respuesta.texto)} clips; el máximo permitido es 5. No se guardó el guion.`);
+  }
+  const texto = respuesta.texto;
 
   let contenido = texto;
   if (tipo === 'carrusel') {
@@ -157,7 +178,9 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma } = {},
       console.error('[content] carrusel: JSON inválido de la IA:', e.message);
       throw err(502, 'La IA no devolvió un JSON de carrusel válido.');
     }
-    contenido = JSON.stringify(carouselExport(json), null, 2); // valida tipo, layouts y 3-5 diapositivas
+    contenido = JSON.stringify(carouselExport(json, lang), null, 2); // valida tipo, layouts y 3-5 diapositivas
+  } else if (tipo === 'copy') {
+    contenido = sanitizeCopy(contenido);
   }
 
   // (d) Siempre nace en revisión: nunca 'publicado'.
@@ -189,4 +212,4 @@ function setEstado(db, id, estado) {
   return { id: Number(id), estado };
 }
 
-module.exports = { generate, generatePackage, setEstado, buildPrompt };
+module.exports = { generate, generatePackage, setEstado, buildPrompt, sanitizeCopy };

@@ -12,9 +12,15 @@ const LAYOUT_ALIASES = {
   'bueno_saberlo': 'bueno-saberlo',
   'bueno-saber': 'bueno-saberlo',
 };
+const DEFAULT_EYEBROWS = {
+  es: { portada:'Cusco · Perú', 'portada-foto':'Cusco · Perú', 'portada-editorial':'Cusco · Perú', ficha:'El paquete', itinerario:'Itinerario', 'foto-sangre':'Tema del viaje', 'foto-overlay':'Tema del viaje', split:'Tema del viaje', 'foto-arriba':'Tema del viaje', 'foto-abajo':'Tema del viaje', galeria:'Galería', 'antes-despues':'Antes / después', incluido:'Incluido', 'bueno-saberlo':'Bueno saberlo', cierre:'Cusco · Perú', cifras:'Las cifras', pasos:'Paso a paso', columnas:'Bueno saberlo', 'qa-panel':'Preguntas frecuentes' },
+  en: { portada:'Cusco · Peru', 'portada-foto':'Cusco · Peru', 'portada-editorial':'Cusco · Peru', ficha:'The package', itinerario:'Itinerary', 'foto-sangre':'Trip focus', 'foto-overlay':'Trip focus', split:'Trip focus', 'foto-arriba':'Trip focus', 'foto-abajo':'Trip focus', galeria:'Gallery', 'antes-despues':'Before / after', incluido:'Included', 'bueno-saberlo':'Good to know', cierre:'Cusco · Peru', cifras:'The numbers', pasos:'Step by step', columnas:'Good to know', 'qa-panel':'Frequently asked questions' },
+};
 
-function normalizeSlideData(layout, data = {}) {
+function normalizeSlideData(layout, data = {}, idioma = 'es') {
   const d = { ...data };
+  const labels = DEFAULT_EYEBROWS[idioma] || DEFAULT_EYEBROWS.es;
+  if (labels[layout] && (!String(d.eyebrow || '').trim() || String(d.eyebrow).trim().toLowerCase() === 'etiqueta')) d.eyebrow = labels[layout];
   const title = d.titulo;
   const text = d.texto;
   if (title) {
@@ -35,7 +41,7 @@ function normalizeSlideData(layout, data = {}) {
 
 // Devuelve el JSON que el constructor carga con "Cargar JSON" (app/version/tipo/slides[{layout,data}]).
 // El constructor completa los campos faltantes con sus valores por defecto, por eso solo se valida tipo y layout.
-function carouselExport({ tipo, slides }) {
+function carouselExport({ tipo, slides }, idioma = 'es') {
   const bad = (m) => Object.assign(new Error(m), { status: 400 });
   if (!LAYOUTS[tipo]) throw bad(`tipo inválido: ${tipo}`);
   if (!Array.isArray(slides) || !slides.length) throw bad('slides vacío');
@@ -46,7 +52,7 @@ function carouselExport({ tipo, slides }) {
   });
   return { app: 'tikaymi-constructor-carruseles', version: 1, tipo, exportadoEn: new Date().toISOString(), slides: slides.map(s => {
     const layout = LAYOUT_ALIASES[s.layout] || s.layout;
-    return { layout, data: normalizeSlideData(layout, s.data || {}) };
+    return { layout, data: normalizeSlideData(layout, s.data || {}, idioma) };
   }) };
 }
 

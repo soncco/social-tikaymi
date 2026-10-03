@@ -133,6 +133,17 @@ test('prompt de carrusel exige el esquema real de cada layout', async () => {
   assert.match(cap.body.messages[0].content, /No uses campos genéricos titulo\/texto/);
 });
 
+test('copy se limpia de Markdown antes de guardarse y pide emojis por plataforma', async () => {
+  const d = db();
+  aprobada(d);
+  const cap = {};
+  const out = await conClave(() => content.generate(d, { post_id:1, tipo:'copy', idioma:'es' }, { fetchImpl: fakeFetch('## Título\n\n**Texto importante**\n- Punto uno\n\n📍 Escríbenos', cap) }));
+  assert.doesNotMatch(out.contenido, /\*\*|^##|^- /m);
+  assert.match(out.contenido, /Texto importante/);
+  assert.match(cap.body.messages[0].content, /texto plano/);
+  assert.match(cap.body.messages[0].content, /2–4 emojis/);
+});
+
 test('registra el límite 429 de la API', async () => {
   const d = db();
   aprobada(d);
@@ -157,12 +168,41 @@ test('prompt_flow contempla clips de ~10 s, fotos por clip y voz/subtítulos', a
   await conClave(() => content.generate(d, { post_id: 1, tipo: 'prompt_flow', idioma: 'en' }, { fetchImpl: fakeFetch('prompts', cap) }));
   const p = cap.body.messages[0].content;
   assert.match(p, /~10 segundos/);
+  assert.match(p, /EXACTAMENTE 3, 4 o 5 clips/);
   assert.match(p, /fotografía de referencia/);
   assert.match(p, /subtítulos/);
   assert.match(p, /Killa no es obligatoria/);
   assert.match(cap.body.system, /inglés/);
   assert.match(cap.body.system, /Deicy Ayala/);
   assert.match(cap.body.system, /enciclopédico/);
+});
+
+test('guion reintenta si la IA devuelve seis clips y no guarda más de cinco', async () => {
+  const d = db();
+  aprobada(d);
+  let calls = 0;
+  const fetchImpl = async (_url, opts) => {
+    calls++;
+    const six = '# Guion\n\n' + Array.from({length:6}, (_,i) => `### Clip ${i+1}\nNarración\n`).join('\n');
+    const five = Array.from({length:5}, (_,i) => `### Clip ${i+1}\nNarración\n`).join('\n');
+    return { ok:true, status:200, json:async () => ({ content:[{type:'text',text:calls === 1 ? six : five}] }) };
+  };
+  const out = await conClave(() => content.generate(d, { post_id:1, tipo:'guion', idioma:'es' }, { fetchImpl }));
+  assert.equal(calls, 2);
+  assert.equal((out.contenido.match(/### Clip \d+/g) || []).length, 5);
+});
+
+test('guion incorpora el módulo de Killa y la salida A-F', async () => {
+  const d = db();
+  aprobada(d);
+  const cap = {};
+  await conClave(() => content.generate(d, { post_id:1, tipo:'guion', idioma:'es' }, { fetchImpl: fakeFetch('guion', cap) }));
+  const prompt = cap.body.messages[0].content;
+  assert.match(prompt, /Killa no es obligatoria/);
+  assert.match(prompt, /EXACTAMENTE 3, 4 o 5 clips/);
+  assert.match(prompt, /A\) concepto general/);
+  assert.match(prompt, /F\) copy de publicación/);
+  assert.match(prompt, /guía mujer/);
 });
 
 test('testimonios: sin testimonio autorizado la IA no puede inventarlos', async () => {

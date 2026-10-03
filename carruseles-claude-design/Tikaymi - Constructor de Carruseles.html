@@ -1082,6 +1082,8 @@ function saveCarousel(format){
 
 function normalizeImportedData(layout, incoming){
   const d = Object.assign({}, incoming || {});
+  const eyebrowDefaults = {portada:'Cusco · Perú','portada-foto':'Cusco · Perú','portada-editorial':'Cusco · Perú',ficha:'El paquete',itinerario:'Itinerario','foto-sangre':'Tema del viaje','foto-overlay':'Tema del viaje',split:'Tema del viaje','foto-arriba':'Tema del viaje','foto-abajo':'Tema del viaje',galeria:'Galería','antes-despues':'Antes / después',incluido:'Incluido','bueno-saberlo':'Bueno saberlo',cierre:'Cusco · Perú',cifras:'Las cifras',pasos:'Paso a paso',columnas:'Bueno saberlo','qa-panel':'Preguntas frecuentes'};
+  if(eyebrowDefaults[layout] && (!String(d.eyebrow || '').trim() || String(d.eyebrow).trim().toLowerCase()==='etiqueta')) d.eyebrow = eyebrowDefaults[layout];
   const title = d.titulo, body = d.texto;
   if(title){
     if(['portada','portada-foto','portada-editorial'].includes(layout) && !d.h1) d.h1 = title;
