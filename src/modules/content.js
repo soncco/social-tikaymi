@@ -78,9 +78,9 @@ function reglasTestimonios(info) {
     : 'Testimonios: no hay ninguno autorizado, así que no incluyas ni insinúes testimonios, reseñas ni opiniones de clientes.';
 }
 
-function resumenAnalisis(db) {
+function resumenAnalisis(db, filtros = {}) {
   try {
-    const a = analyze(db, {});
+    const a = analyze(db, filtros);
     const r = a.resumen;
     return [
       `Publicaciones analizadas: ${r.publicaciones}; consultas: ${r.consultas}; cotizaciones: ${r.cotizaciones}; reservas: ${r.reservas}.`,
@@ -114,7 +114,7 @@ function selectContext(db, post) {
   return { info, pages, resources, terms:[...terms] };
 }
 
-function buildPrompt(db, { post, tipo, idioma, sourceContent, videoConfig = {}, repairFeedback }) {
+function buildPrompt(db, { post, tipo, idioma, sourceContent, videoConfig = {}, repairFeedback, analysisFilters = {} }) {
   const context = selectContext(db, post);
   if (!context.info.length && !context.pages.length) throw err(422, 'No hay información aprobada relacionada con esta pieza. Revisa una página web en Configuración → Sitio web o agrega datos en Biblioteca aprobada.');
   const info = context.info;
@@ -150,7 +150,7 @@ function buildPrompt(db, { post, tipo, idioma, sourceContent, videoConfig = {}, 
   L.push('', '## Recursos disponibles (fotografías y videos reales)');
   if (assets.length) for (const a of assets) L.push(`- [${a.tipo}] ${a.url} — ${a.descripcion ?? 'sin descripción'}${a.destino ? ` (destino: ${a.destino})` : ''}`);
   else L.push('- No hay fotografías ni videos disponibles: no describas material visual inexistente.');
-  L.push('', '## Resumen del análisis de datos', resumenAnalisis(db));
+  L.push('', '## Resumen del análisis de datos', resumenAnalisis(db, analysisFilters));
   if (sourceContent) L.push('', '## Contenido principal ya decidido (fuente obligatoria)',
     'Deriva tu salida de este contenido. No cambies su mensaje, hechos, idioma ni CTA; solo adapta el formato solicitado.', String(sourceContent));
   if (repairFeedback) L.push('', '## Reparación acotada (intento 1 de 1)', 'La respuesta anterior falló la validación. Corrige únicamente estos errores y devuelve la pieza completa, sin explicación adicional:', String(repairFeedback));
@@ -236,15 +236,16 @@ const packageBrief = post => ({
   cta: post.cta, metrica_principal: post.metrica_principal, idioma: post.idioma, formato: post.formato || null,
 });
 
-async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, strict = false, repair_feedback } = {}, { fetchImpl, save = true, package_id = null, repair = true } = {}) {
+async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, strict = false, repair_feedback, analysis_filters, platform_override } = {}, { fetchImpl, save = true, package_id = null, repair = true } = {}) {
   if (!C.CONTENIDO_TIPOS.includes(tipo)) throw err(400, `tipo inválido: ${tipo}. Válidos: ${C.CONTENIDO_TIPOS.join(', ')}`);
-  const idea = plan_idea_id ? db.prepare('SELECT * FROM plan_ideas WHERE id=?').get(plan_idea_id) : null;
+  const idea = plan_idea_id ? db.prepare('SELECT i.*,p.filtros_json FROM plan_ideas i JOIN editorial_plans p ON p.id=i.plan_id WHERE i.id=?').get(plan_idea_id) : null;
   if (plan_idea_id && !idea) throw err(404, 'La idea no existe');
   if (idea && idea.status !== 'aprobada') throw err(400, 'Aprueba la idea antes de generar contenido');
   const post = idea ? { ...JSON.parse(idea.brief_json), plataforma: JSON.parse(idea.platforms)[0], plataformas_destino:JSON.parse(idea.platforms), source_url:idea.source_url }
     : post_id ? db.prepare('SELECT * FROM posts WHERE id=?').get(post_id)
       : brief;
   if (!post) throw err(400, 'Elige una publicación, una idea aprobada o completa un brief nuevo');
+  if (platform_override) post.plataforma = platform_override;
 
   // (a) Sin objetivo, audiencia, etapa, CTA, métrica, plataforma e idioma no se genera nada.
   const faltan = validate(post);
@@ -255,7 +256,8 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source
   if (!C.IDIOMAS.includes(lang)) throw err(400, `idioma inválido: ${lang}. Una pieza usa un solo idioma (es o en).`);
 
   // (b) Prompt con información aprobada + recursos + análisis; 422 si no hay info aprobada.
-  const partes = buildPrompt(db, { post, tipo, idioma: lang, sourceContent: source_content, videoConfig: video_config, repairFeedback: repair_feedback });
+  const filtros = analysis_filters || JSON.parse(idea?.filtros_json || '{}');
+  const partes = buildPrompt(db, { post, tipo, idioma: lang, sourceContent: source_content, videoConfig: video_config, repairFeedback: repair_feedback, analysisFilters: filtros });
 
   // (c) Llamada a la API de Anthropic.
   let respuesta = await llm.complete(db, partes, fetchImpl, { maxTokens: tipo === 'carrusel' ? 5000 : tipo === 'guion' || tipo === 'prompt_flow' ? 6500 : 2500 });
@@ -277,7 +279,7 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source
     if (strict) {
       const validation = validateCarouselStrict(json);
       if (!validation.ok && repair && !repair_feedback) {
-        return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, strict,
+        return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, analysis_filters, platform_override, strict,
           repair_feedback: `Errores: ${validation.errors.join('; ')}\nRespuesta fallida:\n${String(texto).slice(0, 6000)}` }, { fetchImpl, save, package_id, repair:false });
       }
       if (!validation.ok) throw err(502, `Carrusel incompleto: ${validation.errors.join('; ')}. No se guardó el paquete.`);
@@ -290,7 +292,7 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source
   if (strict && (tipo === 'guion' || tipo === 'prompt_flow')) {
     const validation = validateVideoStrict(contenido, video_config || {});
     if (!validation.ok && repair && !repair_feedback) {
-      return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, strict,
+      return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, analysis_filters, platform_override, strict,
         repair_feedback: `Errores: ${validation.errors.join('; ')}\nRespuesta fallida:\n${String(contenido).slice(0, 6000)}` }, { fetchImpl, save, package_id, repair:false });
     }
     if (!validation.ok) throw err(502, `Guion de video incompleto: ${validation.errors.join('; ')}. No se guardó el paquete.`);
@@ -310,7 +312,7 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source
 }
 
 function resolvePost(db, { post_id, plan_idea_id, brief } = {}) {
-  const idea = plan_idea_id ? db.prepare('SELECT * FROM plan_ideas WHERE id=?').get(plan_idea_id) : null;
+  const idea = plan_idea_id ? db.prepare('SELECT i.*,p.filtros_json FROM plan_ideas i JOIN editorial_plans p ON p.id=i.plan_id WHERE i.id=?').get(plan_idea_id) : null;
   if (plan_idea_id && !idea) throw err(404, 'La idea no existe');
   if (idea && idea.status !== 'aprobada') throw err(400, 'Aprueba la idea antes de generar contenido');
   const post = idea ? { ...JSON.parse(idea.brief_json), plataforma: JSON.parse(idea.platforms)[0], plataformas_destino:JSON.parse(idea.platforms), source_url:idea.source_url }
@@ -319,7 +321,7 @@ function resolvePost(db, { post_id, plan_idea_id, brief } = {}) {
   const missing = validate(post);
   if (missing) throw err(400, `No se puede generar contenido: ${missing}`);
   if (!C.IDIOMAS.includes(post.idioma)) throw err(400, `idioma inválido: ${post.idioma}. Una pieza usa un solo idioma (es o en).`);
-  return { post, idea };
+  return { post, idea, analysis_filters: JSON.parse(idea?.filtros_json || '{}') };
 }
 
 const packageSources = context => ({
@@ -334,7 +336,7 @@ function findPending(text) { return [...new Set(String(text || '').match(/\[FALT
 async function generatePackage(db, input = {}, deps = {}) {
   const extra = input.extra || null;
   if (extra && !['guion', 'prompt_flow', 'carrusel'].includes(extra)) throw err(400, 'Complemento inválido');
-  const { post, idea } = resolvePost(db, input);
+  const { post, idea, analysis_filters } = resolvePost(db, input);
   const lang = input.idioma || post.idioma;
   const videoConfig = { clipSeconds: input.clip_seconds || input.video_config?.clipSeconds || 10, speechWpm: input.speech_wpm || input.video_config?.speechWpm || 150 };
   const baseContext = selectContext(db, post);
@@ -344,13 +346,16 @@ async function generatePackage(db, input = {}, deps = {}) {
   let primary = null;
   let additional = null;
   if (extra === 'prompt_flow') {
-    primary = await generate(db, { ...input, idioma:lang, tipo:'guion', strict:true, video_config:videoConfig }, { ...deps, save:false });
-    additional = await generate(db, { ...input, idioma:lang, tipo:'prompt_flow', strict:true, source_content:primary.contenido, video_config:videoConfig }, { ...deps, save:false });
+    primary = await generate(db, { ...input, idioma:lang, tipo:'guion', strict:true, analysis_filters, video_config:videoConfig }, { ...deps, save:false });
+    additional = await generate(db, { ...input, idioma:lang, tipo:'prompt_flow', strict:true, analysis_filters, source_content:primary.contenido, video_config:videoConfig }, { ...deps, save:false });
   } else if (extra) {
-    primary = await generate(db, { ...input, idioma:lang, tipo:extra, strict:true, video_config:videoConfig }, { ...deps, save:false });
+    primary = await generate(db, { ...input, idioma:lang, tipo:extra, strict:true, analysis_filters, video_config:videoConfig }, { ...deps, save:false });
   }
-  const copy = await generate(db, { ...input, idioma:lang, tipo:'copy', source_content:primary?.contenido || null }, { ...deps, save:false });
-  const pending = [...new Set([findPending(primary?.contenido), findPending(additional?.contenido), findPending(copy.contenido)].flat())];
+  const destinos = post.plataformas_destino?.length ? post.plataformas_destino : [post.plataforma];
+  const copies = [];
+  for (const destino of destinos) copies.push(await generate(db, { ...input, idioma:lang, tipo:'copy', platform_override:destino, analysis_filters, source_content:primary?.contenido || null }, { ...deps, save:false }));
+  const copy = copies[0];
+  const pending = [...new Set([findPending(primary?.contenido), findPending(additional?.contenido), ...copies.map(x => findPending(x.contenido))].flat())];
   const warnings = [];
   if (!context.resources.length) warnings.push('No hay recursos visuales relacionados aprobados; cualquier imagen debe proporcionarse o quedar como marcador.');
   if (primary && extra === 'prompt_flow') warnings.push('El guion principal se conserva dentro del contrato; prompts y copy se derivan de él.');
@@ -358,7 +363,7 @@ async function generatePackage(db, input = {}, deps = {}) {
   const brief = packageBrief(post);
   const concept = { title:post.titulo, objective:post.objetivo_marketing, message:post.titulo, structure:extra || 'copy', language:lang };
   const packageData = { contract_version:1, brief, concept, primary:primary ? { tipo:primary.tipo, idioma:primary.idioma, contenido:primary.contenido } : null,
-    outputs:{ copy:[{ plataforma:post.plataforma, idioma:copy.idioma, contenido:copy.contenido }], additional:additional ? { tipo:additional.tipo, idioma:additional.idioma, contenido:additional.contenido } : null },
+    outputs:{ copy:copies.map((x, i) => ({ plataforma:destinos[i], idioma:x.idioma, contenido:x.contenido })), additional:additional ? { tipo:additional.tipo, idioma:additional.idioma, contenido:additional.contenido } : null },
     sources:context.sources, resources:context.resources, cta:post.cta, warnings, pending, validations,
     metadata:{ provider:copy.generation?.provider || primary?.generation?.provider || null, model:copy.generation?.model || primary?.generation?.model || null,
       generated_at:new Date().toISOString(), contract_version:1, rules:['approved_sources_only','human_review_required','strict_new_contract'], source_ids:context.sources.map(s => s.id).filter(Boolean), validation:validations } };
@@ -378,11 +383,12 @@ async function generatePackage(db, input = {}, deps = {}) {
     };
     const savedPrimary = primary && extra !== 'prompt_flow' ? saveOne(primary) : null;
     const savedAdditional = saveOne(additional);
-    const savedCopy = saveOne(copy);
+    const savedCopies = copies.map(saveOne);
+    const savedCopy = savedCopies[0];
     // Mantener la forma histórica de la respuesta: cuando se solicitó un
     // complemento simple (p. ej. guion/carrusel), sigue apareciendo en
     // `additional`, aunque internamente sea el contenido primario del paquete.
-    return { id:Number(packageId), contract_version:1, package:packageData, primary:savedPrimary, copy:savedCopy, additional:savedAdditional || savedPrimary };
+    return { id:Number(packageId), contract_version:1, package:packageData, primary:savedPrimary, copy:savedCopy, copies:savedCopies, additional:savedAdditional || savedPrimary };
   })();
 }
 

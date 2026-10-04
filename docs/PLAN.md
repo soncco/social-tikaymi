@@ -106,6 +106,7 @@ No crear una columna de “estado de clasificación”. Se deriva de los campos 
 - Los rankings globales no eligen ganadores cuando mezclan plataformas; se exponen resultados por plataforma.
 - La confianza comercial requiere al menos tres leads atribuidos para llamarse patrón confirmado.
 - El planificador conserva evidencia, limitaciones y declara hipótesis cuando faltan comparables o cobertura.
+- Los filtros usados para crear un plan se guardan en `editorial_plans.filtros_json` y se reutilizan en el resumen analítico que recibe la generación.
 
 ### Etapa 3 — correcciones y seguimiento (implementación inicial 2026-10-04)
 
@@ -121,11 +122,9 @@ Los borradores aprobados pueden registrarse como ejemplos editoriales (`editoria
 
 `generated_publications` vincula una salida aprobada con la publicación real por plataforma; sus métricas y leads quedan consultables mediante `post_id` sin atribuir resultados automáticamente.
 
+Un paquete con varios destinos genera y guarda una salida de copy por cada plataforma, enlazada al mismo paquete y al mismo brief.
+
 Pendiente: automatizar la captura de resultados posteriores y comparar versiones con snapshots en una vista analítica dedicada.
-
-Etapa 2 (análisis contextual y planificación): comparar sistemáticamente piezas similares, cubrir huecos del calendario, ponderar estacionalidad y disponibilidad, y explicar por qué una propuesta no repite contenido histórico. Requiere confirmación de fuentes, ventanas y reglas comerciales antes de tocar el planificador.
-
-Etapa 3 (corrección, versionado y seguimiento): permitir comentarios de revisión, guardar versiones y diferencias, registrar quién aprobó cada salida y relacionar resultados posteriores con la versión publicada. No existe todavía workflow multiusuario ni atribución completa; no debe simularse con los estados actuales.
 
 1. Validación visual y de comprensión con una persona usuaria real; probar generación real con el proveedor configurado.
 2. Mejorar clasificación asistida para sugerir no solo tema, sino objetivo, audiencia, etapa y CTA.

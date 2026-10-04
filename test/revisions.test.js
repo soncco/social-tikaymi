@@ -42,3 +42,24 @@ test('extrae partes estructuradas de un guion para regeneración por clip', () =
   assert.equal(parts[0].funcion, 'gancho');
   assert.equal(parts[1].dialogo, '“Escríbenos.”');
 });
+
+test('slide:1 regenera la primera diapositiva, no la segunda', async () => {
+  const db = open(':memory:');
+  const post = db.prepare("INSERT INTO posts(plataforma,titulo,objetivo_negocio,objetivo_marketing,objetivo_contenido,audiencia,etapa_embudo,cta,metrica_principal,idioma) VALUES('instagram','Demo','consulta_calificada','x','x','x','consideracion','Escríbenos','consultas','es')").run().lastInsertRowid;
+  const original = { tipo:'producto', slides:[{layout:'portada',data:{h1:'Uno'}},{layout:'cierre',data:{h2:'Dos'}}] };
+  const id = db.prepare("INSERT INTO generated(post_id,tipo,idioma,contenido,estado) VALUES(?,?,?,?, 'revision')").run(post, 'carrusel', 'es', JSON.stringify(original)).lastInsertRowid;
+  const result = await revisions.regenerate(db, id, { segmento:'slide:1', instruccion:'Cambiar portada' }, { content:{ generate:async()=>({ contenido:JSON.stringify({ tipo:'producto', slides:[{layout:'portada',data:{h1:'Nueva'}},{layout:'cierre',data:{h2:'No tocar'}}] }) }) } });
+  const output = JSON.parse(result.anterior === undefined ? db.prepare('SELECT contenido FROM generated WHERE id=?').get(id).contenido : db.prepare('SELECT contenido FROM generated WHERE id=?').get(id).contenido);
+  assert.equal(output.slides[0].data.h1, 'Nueva');
+  assert.equal(output.slides[1].data.h2, 'Dos');
+});
+
+test('regeneración conserva plan_idea_id cuando no hay publicación asociada', async () => {
+  const db = open(':memory:');
+  const plan = db.prepare("INSERT INTO editorial_plans(cadence,objetivo_negocio) VALUES('semana','consulta_calificada')").run().lastInsertRowid;
+  const idea = db.prepare("INSERT INTO plan_ideas(plan_id,title,platforms,brief_json,evidence,limitations,confidence,position) VALUES(?,?,?,?,?,?,?,?)").run(plan, 'Idea', '[\"instagram\"]', JSON.stringify({ titulo:'Idea', plataforma:'instagram', objetivo_negocio:'consulta_calificada', objetivo_marketing:'x', objetivo_contenido:'x', audiencia:'x', etapa_embudo:'consideracion', cta:'x', metrica_principal:'x', idioma:'es' }), 'x', 'x', 'datos_insuficientes', 1).lastInsertRowid;
+  const id = db.prepare("INSERT INTO generated(plan_idea_id,tipo,idioma,contenido,estado) VALUES(?,?,?,?, 'revision')").run(idea, 'copy', 'es', 'Inicial').lastInsertRowid;
+  let received;
+  await revisions.regenerate(db, id, {}, { content:{ generate:async (_db, input) => { received = input; return { contenido:'Nueva' }; } } });
+  assert.equal(received.plan_idea_id, idea);
+});

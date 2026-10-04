@@ -19,6 +19,7 @@ const planner = require('./modules/planner');
 const site = require('./modules/site');
 const editorialStrategy = require('./modules/editorial-strategy');
 const revisions = require('./modules/revisions');
+const metricsMod = require('./modules/metrics');
 
 const wrap = fn => (req, res, next) => { try { res.json(fn(req, res) ?? { ok: true }); } catch (e) { next(e); } };
 const wrapAsync = fn => async (req, res, next) => { try { res.json((await fn(req, res)) ?? { ok: true }); } catch (e) { next(e); } };
@@ -70,9 +71,7 @@ function api(db) {
     const postId = req.body?.post_id;
     const row = db.prepare('SELECT * FROM metrics WHERE post_id=?').get(postId);
     if (!row) throw Object.assign(new Error('No hay métricas para esa publicación'), { status: 404 });
-    const id = db.prepare('INSERT INTO metric_snapshots(post_id,snapshot_json) VALUES(?,?)')
-      .run(postId, JSON.stringify(row)).lastInsertRowid;
-    return { id: Number(id), post_id: Number(postId), captured_at: row.captured_at };
+    return metricsMod.snapshotIfChanged(db, postId) || { duplicated: true, post_id: Number(postId) };
   }));
   r.get('/metrics/snapshots', wrap(req => req.query.post_id
     ? db.prepare('SELECT * FROM metric_snapshots WHERE post_id=? ORDER BY id DESC').all(req.query.post_id)

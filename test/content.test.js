@@ -232,3 +232,11 @@ test('selecciona solo fuentes aprobadas relacionadas con el producto', () => {
   assert.equal(selected.info.length, 1);
   assert.match(selected.info[0].titulo, /Humantay/);
 });
+
+test('el resumen analítico del prompt respeta filtros entregados por el plan', async () => {
+  const d = db();
+  aprobada(d);
+  const cap = {};
+  await conClave(() => content.generate(d, { post_id:1, tipo:'copy', idioma:'es', analysis_filters:{ plataforma:'instagram', idioma:'es' } }, { fetchImpl: fakeFetch('copy', cap), save:false }));
+  assert.match(cap.body.messages[0].content, /## Resumen del análisis de datos/);
+});

@@ -48,7 +48,7 @@ async function regenerate(db, id, { segmento = 'pieza', instruccion = 'Corrige l
   const current = getGenerated(db, id);
   if (!content?.generate) throw err(500, 'Generador no disponible');
   const generated = await content.generate(db, {
-    post_id: current.post_id, tipo: current.tipo, idioma: current.idioma,
+    post_id: current.post_id, plan_idea_id: current.plan_idea_id || undefined, tipo: current.tipo, idioma: current.idioma,
     source_content: current.contenido, strict: current.tipo === 'carrusel' || current.tipo === 'guion' || current.tipo === 'prompt_flow',
     repair_feedback: `Segmento a corregir: ${segmento}\nMotivo: ${instruccion}`
   }, { fetchImpl, save: false, repair: false });
@@ -60,7 +60,7 @@ async function regenerate(db, id, { segmento = 'pieza', instruccion = 'Corrige l
     try {
       const before = JSON.parse(current.contenido);
       const after = JSON.parse(generated.contenido);
-      const index = Number(match[1]);
+      const index = Number(match[1]) - 1;
       if (!Array.isArray(before.slides) || !after.slides?.[index] || !before.slides[index]) throw err(422, 'La diapositiva solicitada no existe en el carrusel');
       before.slides[index] = after.slides[index];
       replacement = JSON.stringify(before, null, 2);

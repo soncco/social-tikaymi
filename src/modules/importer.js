@@ -1,5 +1,6 @@
 const { getAdapter } = require('../adapters');
 const { METRICS } = require('../db');
+const { snapshotIfChanged } = require('./metrics');
 
 /**
  * importCsv - Import CSV data from a platform
@@ -62,6 +63,7 @@ function importCsv(db, plataforma, csvText) {
         // Extract metric values in order
         const metricValues = METRICS.map(m => row[m] ?? null);
         updateMetrics.run(existing.id, ...metricValues);
+        snapshotIfChanged(db, existing.id);
       } else {
         // New post - use 'sin_clasificar' for required fields
         result.imported++;
@@ -90,6 +92,7 @@ function importCsv(db, plataforma, csvText) {
         // Store metrics for new post
         const metricValues = METRICS.map(m => row[m] ?? null);
         updateMetrics.run(postId, ...metricValues);
+        snapshotIfChanged(db, postId);
       }
     } catch (err) {
       result.errors.push(`Error importando ${row.external_id || 'unknown'}: ${err.message}`);

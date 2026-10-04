@@ -83,13 +83,14 @@ test('idea aprobada genera copy obligatorio y complemento; falla sin guardar par
   };
   const result = await withKey(() => content.generatePackage(db, { plan_idea_id:id, extra:'guion' }, { fetchImpl:capture }));
   assert.equal(result.copy.tipo, 'copy');
+  assert.equal(result.copies.length, 2, 'una copia por plataforma destino');
   assert.equal(result.additional.tipo, 'guion');
   assert.equal(result.copy.estado, 'revision');
   assert.match(prompts[0], /instagram, facebook/);
   assert.match(prompts[0], /versión de copy claramente etiquetada/);
-  assert.equal(db.prepare('SELECT count(*) n FROM generated').get().n, 2);
+  assert.equal(db.prepare('SELECT count(*) n FROM generated').get().n, 3);
   await withKey(() => assert.rejects(() => content.generatePackage(db, { plan_idea_id:id, extra:'carrusel' }, { fetchImpl:fake('No es JSON') }), /JSON de carrusel válido/));
-  assert.equal(db.prepare('SELECT count(*) n FROM generated').get().n, 2);
+  assert.equal(db.prepare('SELECT count(*) n FROM generated').get().n, 3);
   db.close();
 });
 

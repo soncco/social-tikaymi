@@ -249,3 +249,11 @@ test('Meta: acepta "Title"/"Publish time" y usa Sin título si falta el título'
   assert.equal(r[0].reach, 1200);
   assert.equal(r[1].titulo, 'Sin título');
 });
+
+test('importación crea un snapshot y no duplica métricas sin cambios', () => {
+  const db = open(':memory:');
+  const csv = 'Post ID,Title,Publish time,Reach\nsnap-1,Demo,2026-09-01,100\n';
+  importCsv(db, 'instagram', csv);
+  importCsv(db, 'instagram', csv);
+  assert.equal(db.prepare('SELECT count(*) n FROM metric_snapshots').get().n, 1);
+});

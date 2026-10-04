@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS approval_events(
   estado TEXT NOT NULL, revisor TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS editorial_plans(
   id INTEGER PRIMARY KEY, cadence TEXT NOT NULL, objetivo_negocio TEXT NOT NULL,
-  method TEXT NOT NULL DEFAULT 'analisis', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+  method TEXT NOT NULL DEFAULT 'analisis', filtros_json TEXT NOT NULL DEFAULT '{}', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS plan_ideas(
   id INTEGER PRIMARY KEY, plan_id INTEGER NOT NULL REFERENCES editorial_plans(id) ON DELETE CASCADE,
   title TEXT NOT NULL, platforms TEXT NOT NULL, brief_json TEXT NOT NULL,
@@ -135,6 +135,8 @@ function migrate(db) {
   const packageCols = db.prepare('PRAGMA table_info(content_packages)').all().map(c => c.name);
   if (packageCols.length && !packageCols.includes('primary_json')) db.exec("ALTER TABLE content_packages ADD COLUMN primary_json TEXT NOT NULL DEFAULT '{}'");
   if (packageCols.length && !packageCols.includes('metadata_json')) db.exec("ALTER TABLE content_packages ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'");
+  const planCols = db.prepare('PRAGMA table_info(editorial_plans)').all().map(c => c.name);
+  if (planCols.length && !planCols.includes('filtros_json')) db.exec("ALTER TABLE editorial_plans ADD COLUMN filtros_json TEXT NOT NULL DEFAULT '{}'");
   const ideaCols = db.prepare('PRAGMA table_info(plan_ideas)').all().map(c => c.name);
   if (!ideaCols.includes('planned_for')) db.exec('ALTER TABLE plan_ideas ADD COLUMN planned_for TEXT');
   if (!ideaCols.includes('source_url')) db.exec('ALTER TABLE plan_ideas ADD COLUMN source_url TEXT');

@@ -285,3 +285,13 @@ No implementado en esta etapa: análisis contextual avanzado del calendario, wor
 Confirmado: existen versiones y feedback de borradores, regeneración localizada `slide:N`/`clip:N` cuando el formato es estructurable, partes verificables de guiones, snapshots de métricas, ejemplos editoriales aprobados y vínculos explícitos entre contenido aprobado y publicaciones reales.
 
 Pendiente: no existe todavía una vista analítica que compare automáticamente versiones con resultados posteriores ni autenticación multiusuario; `approval_events` conserva el revisor informado por la interfaz o cabecera.
+
+### Hallazgos verificados sobre la revisión base e9b0a75
+
+- Corregido: los filtros del plan se persisten y se reutilizan al construir el resumen analítico de generación.
+- Corregido: `slide:1` usa indexación humana y reemplaza la primera diapositiva.
+- Corregido: la regeneración conserva `plan_idea_id` cuando no existe `post_id`.
+- Corregido: importación CSV y sincronización crean snapshots solo cuando cambian las métricas.
+- Corregido: la interfaz de borradores expone feedback, historial y regeneración.
+- Corregido: los paquetes con varios destinos generan una salida de copy por plataforma.
+- Verificación pendiente: los siete tests HTTP que abren servidor no pueden ejecutarse en este entorno por `listen EPERM`; los tests unitarios nuevos sí pasan.

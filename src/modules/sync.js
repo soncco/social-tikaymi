@@ -2,6 +2,7 @@
 // (POST /api/sync/:plataforma); nunca corre sola. Sólo lee: no publica nada.
 const { getAdapter } = require('../adapters');
 const { METRICS } = require('../db');
+const { snapshotIfChanged } = require('./metrics');
 
 const MIN_HORAS = 20; // contrato: como mucho una vez al día por publicación
 const AVISO_DIAS = 7;
@@ -44,6 +45,7 @@ async function syncStats(db, plataforma, { force = false, limit = 25, fetchImpl,
     if (id) res.actualizados++;
     else { id = ins.run(plataforma, p.external_id, p.titulo, p.fecha, p.formato).lastInsertRowid; res.nuevos++; }
     up.run(id, ...METRICS.map(m => s[m] ?? null));
+    snapshotIfChanged(db, id);
   }
   if (token.dias_restantes != null && token.dias_restantes <= AVISO_DIAS) res.aviso = `El token de Meta caduca en ${token.dias_restantes} día(s): renuévalo.`;
   if (token.code === 'credenciales_caducadas') res.aviso = 'El token de Meta caducó: genera uno nuevo.';

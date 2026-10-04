@@ -141,7 +141,7 @@ function preview(db, { cadence = 'semana', objetivo_negocio = 'consulta_califica
 function get(db, id) {
   const plan = db.prepare('SELECT * FROM editorial_plans WHERE id=?').get(id);
   if (!plan) throw err('El plan no existe', 404);
-  return { ...plan, ideas: db.prepare('SELECT * FROM plan_ideas WHERE plan_id=? ORDER BY position').all(id)
+  return { ...plan, filtros: JSON.parse(plan.filtros_json || '{}'), ideas: db.prepare('SELECT * FROM plan_ideas WHERE plan_id=? ORDER BY position').all(id)
     .map(x => ({ ...x, platforms: JSON.parse(x.platforms), brief: JSON.parse(x.brief_json) })) };
 }
 
@@ -181,8 +181,8 @@ async function create(db, options = {}, { fetchImpl } = {}) {
     }
   }
   const id = db.transaction(() => {
-    const planId = db.prepare('INSERT INTO editorial_plans(cadence,objetivo_negocio,method) VALUES(?,?,?)')
-      .run(draft.cadence, draft.objetivo_negocio, options.use_ai === true ? 'ia' : 'analisis').lastInsertRowid;
+    const planId = db.prepare('INSERT INTO editorial_plans(cadence,objetivo_negocio,method,filtros_json) VALUES(?,?,?,?)')
+      .run(draft.cadence, draft.objetivo_negocio, options.use_ai === true ? 'ia' : 'analisis', JSON.stringify(options.filtros || {})).lastInsertRowid;
     const insert = db.prepare('INSERT INTO plan_ideas(plan_id,title,platforms,brief_json,evidence,limitations,confidence,position,planned_for,source_url) VALUES(?,?,?,?,?,?,?,?,?,?)');
     for (const idea of draft.ideas) insert.run(planId, idea.title, JSON.stringify(idea.platforms), JSON.stringify(idea.brief), idea.evidence, idea.limitations, idea.confidence, idea.position, idea.planned_for, idea.source_url);
     return planId;
