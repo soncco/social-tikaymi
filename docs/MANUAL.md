@@ -90,7 +90,7 @@ El estado editorial y la calidad de clasificación son conceptos diferentes:
 - Las piezas históricas clasificadas por criterio editorial muestran **Inferida**. En **Editar** se explica el motivo; no equivale al brief original aprobado.
 - `mixto` documenta copys antiguos en español e inglés, pero no está permitido al crear una pieza nueva.
 - Para compararla por objetivo, audiencia, tema o CTA, completa esos campos mediante clasificación rápida o edición individual.
-- Un contenido nuevo creado dentro de la app comienza como `borrador`.
+- Una publicación nueva creada manualmente mediante la API comienza como `borrador`; un borrador generado por IA comienza como `revision` y requiere aprobación humana.
 
 ## Instalación y respaldo
 
@@ -105,7 +105,7 @@ npm test
 
 Configura al menos `ADMIN_PASSWORD` y `SESSION_SECRET`. Para generar contenido agrega una de `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` o `DEEPSEEK_API_KEY` y selecciona el proveedor en Configuración.
 
-Los datos viven en `data/tikaymi.db`; respaldar ese archivo es suficiente. Consulta [CONECTAR-PLATAFORMAS.md](CONECTAR-PLATAFORMAS.md) para las credenciales de Meta.
+Los datos viven en `data/tikaymi.db` y SQLite usa archivos WAL/SHM durante la ejecución. Para un respaldo consistente, detén la aplicación antes de copiar el conjunto `data/tikaymi.db`, `data/tikaymi.db-wal` y `data/tikaymi.db-shm`, o usa un procedimiento de backup de SQLite. Consulta [CONECTAR-PLATAFORMAS.md](CONECTAR-PLATAFORMAS.md) para las credenciales de Meta.
 
 ## Problemas frecuentes
 

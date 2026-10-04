@@ -67,7 +67,7 @@ La base real contiene 50 publicaciones de Meta con métricas: 25 de Instagram y 
 ### Verificación
 
 - `node --check public/app.js`: correcto.
-- Suite completa `npm test`: 88/88 pruebas correctas tras integrar la estrategia; incluye sitemap seguro, sincronización idempotente, API autenticada, retiro de aprobación, archivado de URL, uso local en planes y aislamiento de páginas no aprobadas.
+- **Snapshot histórico de verificación:** una ejecución anterior registró 88 pruebas correctas. En la revisión del 2026-10-03, `npm test` ejecutó 95 subpruebas: 88 pasaron y 7 fallaron al intentar abrir un puerto (`listen EPERM`) en el entorno restringido. Repetir en un entorno con sockets permitidos antes de afirmar que la suite está completamente correcta.
 - Pruebas nuevas para estado de publicaciones importadas, clasificación parcial masiva y validaciones.
 - Base real abierta con la migración: 49 publicaciones analizables, 2 plataformas y 6 recomendaciones.
 
