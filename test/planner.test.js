@@ -75,7 +75,12 @@ test('idea aprobada genera copy obligatorio y complemento; falla sin guardar par
   await withKey(() => assert.rejects(() => content.generatePackage(db, { plan_idea_id:id }, { fetchImpl:fake('Copy') }), /Aprueba la idea/));
   planner.updateIdea(db, id, { status:'aprobada', title:'Humantay', brief:{ cta:'Escríbenos HUMANTAY' } });
   const prompts = [];
-  const capture = async (_url, opts) => { prompts.push(JSON.parse(opts.body).messages[0].content); return fake('Texto')(); };
+  const capture = async (_url, opts) => {
+    const prompt = JSON.parse(opts.body).messages[0].content;
+    prompts.push(prompt);
+    const guion = Array.from({ length:3 }, (_, i) => `### Clip ${i + 1}\nFunción: explicación\nDuración: 10 segundos\nDiálogo: “Planifica tu ruta con Deicy.”\n`).join('\n');
+    return fake(prompt.includes('Módulo de guiones') ? guion : 'Texto')();
+  };
   const result = await withKey(() => content.generatePackage(db, { plan_idea_id:id, extra:'guion' }, { fetchImpl:capture }));
   assert.equal(result.copy.tipo, 'copy');
   assert.equal(result.additional.tipo, 'guion');

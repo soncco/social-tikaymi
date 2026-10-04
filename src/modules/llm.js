@@ -5,30 +5,30 @@ const err = (status, message) => Object.assign(new Error(message), { status });
 const PROVIDERS = {
   anthropic: {
     label: 'Anthropic (Claude)', keyEnv: 'ANTHROPIC_API_KEY', modelEnv: 'ANTHROPIC_MODEL', defaultModel: 'claude-sonnet-5',
-    request: (key, model, { sistema, prompt }) => ({
+    request: (key, model, { sistema, prompt }, budget) => ({
       url: 'https://api.anthropic.com/v1/messages',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: { model, max_tokens: 4000, system: sistema, messages: [{ role: 'user', content: prompt }] },
+      body: { model, max_tokens: budget, system: sistema, messages: [{ role: 'user', content: prompt }] },
     }),
     extract: d => (d?.content || []).filter(b => b?.type === 'text').map(b => b.text).join('\n'),
   },
   openai: {
     label: 'OpenAI', keyEnv: 'OPENAI_API_KEY', modelEnv: 'OPENAI_MODEL', defaultModel: 'gpt-4o',
-    request: (key, model, p) => ({ url: 'https://api.openai.com/v1/chat/completions', ...chat(key, model, p) }),
+    request: (key, model, p, budget) => ({ url: 'https://api.openai.com/v1/chat/completions', ...chat(key, model, p, budget) }),
     extract: d => d?.choices?.[0]?.message?.content,
   },
   deepseek: {
     label: 'DeepSeek', keyEnv: 'DEEPSEEK_API_KEY', modelEnv: 'DEEPSEEK_MODEL', defaultModel: 'deepseek-chat',
-    request: (key, model, p) => ({ url: 'https://api.deepseek.com/chat/completions', ...chat(key, model, p) }),
+    request: (key, model, p, budget) => ({ url: 'https://api.deepseek.com/chat/completions', ...chat(key, model, p, budget) }),
     extract: d => d?.choices?.[0]?.message?.content,
   },
 };
 
 // OpenAI y DeepSeek comparten el formato "chat completions"
-function chat(key, model, { sistema, prompt }) {
+function chat(key, model, { sistema, prompt }, budget) {
   return {
     headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-    body: { model, messages: [{ role: 'system', content: sistema }, { role: 'user', content: prompt }] },
+    body: { model, max_tokens: budget, messages: [{ role: 'system', content: sistema }, { role: 'user', content: prompt }] },
   };
 }
 
@@ -61,12 +61,15 @@ function configure(db, { provider, model }) {
   return status(db);
 }
 
-async function complete(db, partes, fetchImpl) {
+const DEFAULT_BUDGET = 4000;
+
+async function complete(db, partes, fetchImpl, options = {}) {
   const { provider, model } = active(db);
   const p = PROVIDERS[provider];
   const key = process.env[p.keyEnv];
   if (!key) throw err(503, `Falta ${p.keyEnv}: configura la clave en el entorno (.env) para usar ${p.label}, o elige otro proveedor.`);
-  const req = p.request(key, model, partes);
+  const budget = Number(options.maxTokens || process.env.LLM_MAX_TOKENS || DEFAULT_BUDGET);
+  const req = p.request(key, model, partes, Number.isFinite(budget) && budget > 0 ? budget : DEFAULT_BUDGET);
   let res;
   try {
     res = await (fetchImpl || globalThis.fetch)(req.url, { method: 'POST', headers: req.headers, body: JSON.stringify(req.body) });
@@ -87,7 +90,9 @@ async function complete(db, partes, fetchImpl) {
     console.error(`[llm] respuesta incompleta de ${p.label}:`, JSON.stringify(data).slice(0, 500));
     throw err(502, `La API de ${p.label} devolvió una respuesta sin texto.`);
   }
-  return { texto, provider, model };
+  const stopReason = data.stop_reason || data.choices?.[0]?.finish_reason || null;
+  const truncated = stopReason === 'max_tokens' || stopReason === 'length';
+  return { texto, provider, model, budget, stop_reason: stopReason, truncated, usage: data.usage || null };
 }
 
 module.exports = { PROVIDERS, active, status, configure, complete };

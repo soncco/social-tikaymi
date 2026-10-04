@@ -34,15 +34,21 @@ const presets = [
   { platforms: ['tiktok', 'youtube_shorts'], format: 'guion' },
 ];
 
-function preview(db, { cadence = 'semana', objetivo_negocio = 'consulta_calificada' } = {}) {
+function preview(db, { cadence = 'semana', objetivo_negocio = 'consulta_calificada', filtros = {} } = {}) {
   if (!['semana', 'mes'].includes(cadence)) throw err('El período debe ser semana o mes');
   if (!C.OBJETIVOS_NEGOCIO.includes(objetivo_negocio)) throw err('Objetivo de negocio inválido');
-  const a = analyze(db, {});
+  const a = analyze(db, filtros);
   const strategy = strategyMod.get(db);
   const rows = db.prepare(`SELECT p.id,p.plataforma,p.titulo,p.tema,p.formato,p.idioma,p.objetivo_contenido,
     m.saves,m.shares,m.clicks,m.conversations
     FROM posts p LEFT JOIN metrics m ON m.post_id=p.id
-    WHERE p.estado IN ('publicado','analizado') AND p.titulo NOT IN ('','Sin título')`).all();
+    WHERE p.estado IN ('publicado','analizado') AND p.titulo NOT IN ('','Sin título')
+      AND (? IS NULL OR p.plataforma=?) AND (? IS NULL OR p.formato=?) AND (? IS NULL OR p.idioma=?)
+      AND (? IS NULL OR p.objetivo_negocio=?)`).all(
+        filtros.plataforma ?? null, filtros.plataforma ?? null,
+        filtros.formato ?? null, filtros.formato ?? null,
+        filtros.idioma ?? null, filtros.idioma ?? null,
+        filtros.objetivo ?? null, filtros.objetivo ?? null);
   const approved = db.prepare('SELECT titulo FROM approved_info WHERE autorizado_publicar=1 ORDER BY id DESC').all();
   const sitePages = db.prepare(`SELECT url,title,description,kind,approved,lang FROM site_pages
     WHERE active=1 AND kind IN ('blog','tour','evento','destino')`).all();
@@ -129,7 +135,7 @@ function preview(db, { cadence = 'semana', objetivo_negocio = 'consulta_califica
       planned_for: planned.toISOString().slice(0,10),
       confidence: matching ? (a.por_plataforma?.[sourcePlatform]?.confianza || 'senal_inicial') : 'datos_insuficientes', position: i + 1 });
   }
-  return { cadence, objetivo_negocio, ideas, summary: `${a.resumen?.publicaciones || 0} publicaciones analizadas; ${a.resumen?.consultas || 0} consultas atribuidas.` };
+  return { cadence, objetivo_negocio, filtros, ideas, summary: `${a.resumen?.publicaciones || 0} publicaciones analizadas; ${a.resumen?.consultas || 0} consultas atribuidas. ${a.confianza === 'datos_insuficientes' ? 'Las propuestas son hipótesis por cobertura insuficiente.' : 'Las métricas se interpretan por plataforma y con cobertura explícita.'}` };
 }
 
 function get(db, id) {

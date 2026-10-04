@@ -91,6 +91,42 @@ No crear una columna de “estado de clasificación”. Se deriva de los campos 
 
 ## Próximas etapas
 
+### Etapa 1 — paquete coherente y salidas ejecutables (implementada 2026-10-03)
+
+- `content_packages` guarda una revisión versionada con brief, contenido principal, salidas derivadas, fuentes, recursos, pendientes, validaciones y metadatos de proveedor/modelo/reglas.
+- `generatePackage()` decide primero el contenido principal y deriva copy/prompts posteriores; los borradores históricos de `generated` se conservan.
+- La selección de contexto se limita a información, páginas y recursos aprobados relacionados con la publicación.
+- Carruseles nuevos se validan con el esquema real del constructor (3–5 diapositivas, layouts/campos válidos); las importaciones antiguas siguen pasando por la compatibilidad de `export.js`.
+- Guiones y `prompt_flow` validan 3–5 clips, voz/diálogo por clip y duración estimada. Se permite una sola reparación acotada; no hay reintentos ilimitados.
+- El proveedor registra presupuesto, modelo, motivo de parada, uso y truncamiento en la respuesta de ejecución; no se persisten claves ni datos personales.
+
+### Etapa 2 — análisis contextualizado (implementada 2026-10-03)
+
+- `analyze()` acepta filtros por período, fechas, plataforma, objetivo, formato, idioma y tema.
+- Los rankings globales no eligen ganadores cuando mezclan plataformas; se exponen resultados por plataforma.
+- La confianza comercial requiere al menos tres leads atribuidos para llamarse patrón confirmado.
+- El planificador conserva evidencia, limitaciones y declara hipótesis cuando faltan comparables o cobertura.
+
+### Etapa 3 — correcciones y seguimiento (implementación inicial 2026-10-04)
+
+- `generated_revisions` conserva versiones y motivo de cada edición; editar devuelve automáticamente el contenido a `revision`.
+- `generated_feedback` registra qué segmento falló y por qué.
+- Existen endpoints para listar versiones, registrar feedback y editar un borrador. La regeneración acotada usa el segmento y motivo como instrucciones, pero devuelve la pieza completa para revisión.
+- `lead_status_history` conserva las transiciones de estado sin perder el estado anterior.
+- `approval_events` registra el estado y revisor informado al aprobar/rechazar un borrador.
+
+Implementado adicionalmente: `POST /generated/:id/regenerate` reemplaza solo `slide:N` en carruseles estructurados o `clip:N` en guiones con partes detectables, y conserva el resto; `generated_parts` expone los campos verificables por clip; `metric_snapshots` y sus endpoints conservan copias inmutables de métricas.
+
+Los borradores aprobados pueden registrarse como ejemplos editoriales (`editorial_examples`) para usarlos como referencia futura sin convertir una corrección puntual en regla global.
+
+`generated_publications` vincula una salida aprobada con la publicación real por plataforma; sus métricas y leads quedan consultables mediante `post_id` sin atribuir resultados automáticamente.
+
+Pendiente: automatizar la captura de resultados posteriores y comparar versiones con snapshots en una vista analítica dedicada.
+
+Etapa 2 (análisis contextual y planificación): comparar sistemáticamente piezas similares, cubrir huecos del calendario, ponderar estacionalidad y disponibilidad, y explicar por qué una propuesta no repite contenido histórico. Requiere confirmación de fuentes, ventanas y reglas comerciales antes de tocar el planificador.
+
+Etapa 3 (corrección, versionado y seguimiento): permitir comentarios de revisión, guardar versiones y diferencias, registrar quién aprobó cada salida y relacionar resultados posteriores con la versión publicada. No existe todavía workflow multiusuario ni atribución completa; no debe simularse con los estados actuales.
+
 1. Validación visual y de comprensión con una persona usuaria real; probar generación real con el proveedor configurado.
 2. Mejorar clasificación asistida para sugerir no solo tema, sino objetivo, audiencia, etapa y CTA.
 3. Añadir filtros de período y detalle individual de publicación.

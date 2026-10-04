@@ -53,7 +53,9 @@ function confianza(nPosts, dias, leadsAtribuidos) {
   if (nPosts < 5 || dias < 14) return 'datos_insuficientes';
   if (nPosts < 10) return 'senal_inicial';
   if (nPosts < 20) return 'patron_probable';
-  return leadsAtribuidos > 0 ? 'patron_confirmado' : 'patron_probable';
+  // Un único lead no confirma un patrón comercial: exigimos una señal mínima
+  // reproducible y dejamos el resto como patrón probable.
+  return leadsAtribuidos >= 3 ? 'patron_confirmado' : 'patron_probable';
 }
 
 function grupo(rows, dias) {
@@ -202,11 +204,19 @@ function recomendaciones({ rows, dias, nivel, mejores, idioma, pendientes, conve
   return out;
 }
 
-function analyze(db, { periodo } = {}) {
+function analyze(db, filters = {}) {
+  const { periodo, plataforma, objetivo: objetivoFiltro, formato, idioma: idiomaFiltro, tema, fecha_desde, fecha_hasta } = filters;
   const marca = POSTS_ANALIZABLES.map(() => '?').join(',');
   const params = [...POSTS_ANALIZABLES];
   let where = `p.estado IN (${marca})`;
   if (periodo) { where += ' AND p.fecha LIKE ?'; params.push(periodo + '%'); }
+  if (plataforma) { where += ' AND p.plataforma = ?'; params.push(plataforma); }
+  if (objetivoFiltro) { where += ' AND p.objetivo_negocio = ?'; params.push(objetivoFiltro); }
+  if (formato) { where += ' AND p.formato = ?'; params.push(formato); }
+  if (idiomaFiltro) { where += ' AND p.idioma = ?'; params.push(idiomaFiltro); }
+  if (tema) { where += ' AND p.tema = ?'; params.push(tema); }
+  if (fecha_desde) { where += ' AND p.fecha >= ?'; params.push(fecha_desde); }
+  if (fecha_hasta) { where += ' AND p.fecha <= ?'; params.push(fecha_hasta); }
   const rows = db.prepare(`SELECT p.*, m.reach, m.impressions, m.plays, m.retention, m.completed_plays, m.likes, m.comments, m.shares, m.saves, m.profile_visits, m.clicks, m.conversations
     FROM posts p LEFT JOIN metrics m ON m.post_id = p.id WHERE ${where} ORDER BY p.fecha, p.id`).all(params);
 
@@ -255,14 +265,19 @@ function analyze(db, { periodo } = {}) {
         confianza: nivel, tipo: 'observado',
       };
 
+  const plataformasAnalizadas = [...new Set(rows.map(r => r.plataforma))];
   const mejores = {
     // El ranking de "mejor" nunca usa me gusta (§4).
-    retencion: mejorPor(rows, r => num(r.retention)),
-    guardados_compartidos: mejorPor(rows, r => (num(r.saves) === null && num(r.shares) === null ? null : (num(r.saves) ?? 0) + (num(r.shares) ?? 0))),
-    conversion: atribuidos.length
+    retencion: plataformasAnalizadas.length > 1 ? { sin_datos:true, motivo:'no se elige un ganador entre plataformas; consulta por_plataforma', tipo:'observado' } : mejorPor(rows, r => num(r.retention)),
+    guardados_compartidos: plataformasAnalizadas.length > 1 ? { sin_datos:true, motivo:'no se suman señales de plataformas distintas; consulta por_plataforma', tipo:'observado' } : mejorPor(rows, r => (num(r.saves) === null && num(r.shares) === null ? null : (num(r.saves) ?? 0) + (num(r.shares) ?? 0))),
+    conversion: plataformasAnalizadas.length > 1 ? { sin_datos:true, motivo:'no se elige un ganador entre plataformas; consulta por_plataforma', tipo:'observado' } : atribuidos.length
       ? mejorPor(rows, r => (r.leads.length ? cuenta(r.leads, ES_CONSULTA) : null), r => ({ cta: r.cta }))
       : { sin_datos: true, motivo: 'no hay leads atribuidos; no se declara ganador por conversión', tipo: 'observado' },
   };
+  const mejoresPorPlataforma = Object.fromEntries(plataformasAnalizadas.map(p => {
+    const rs = rows.filter(r => r.plataforma === p);
+    return [p, { retencion:mejorPor(rs, r => num(r.retention)), guardados_compartidos:mejorPor(rs, r => (num(r.saves) === null && num(r.shares) === null ? null : (num(r.saves) ?? 0) + (num(r.shares) ?? 0))) }];
+  }));
   for (const k of Object.keys(mejores)) if (!mejores[k].sin_datos) mejores[k].confianza = nivel;
 
   const pendientes = rows.filter(r => sinClasificar(r.tema))
@@ -279,6 +294,7 @@ function analyze(db, { periodo } = {}) {
     por_cta: agrupar(rows, 'cta', dias),
     conversion,
     mejores,
+    mejores_por_plataforma: mejoresPorPlataforma,
     idioma,
     pendientes_clasificacion: pendientes,
     confianza: nivel,

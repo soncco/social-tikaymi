@@ -18,6 +18,7 @@ const content = require('./modules/content');
 const planner = require('./modules/planner');
 const site = require('./modules/site');
 const editorialStrategy = require('./modules/editorial-strategy');
+const revisions = require('./modules/revisions');
 
 const wrap = fn => (req, res, next) => { try { res.json(fn(req, res) ?? { ok: true }); } catch (e) { next(e); } };
 const wrapAsync = fn => async (req, res, next) => { try { res.json((await fn(req, res)) ?? { ok: true }); } catch (e) { next(e); } };
@@ -61,11 +62,24 @@ function api(db) {
   }));
   r.put('/leads/:id', wrap(req => {
     if (!C.LEAD_ESTADOS.includes(req.body.estado)) throw Object.assign(new Error('estado inválido'), { status: 400 });
-    db.prepare('UPDATE leads SET estado=? WHERE id=?').run(req.body.estado, req.params.id);
+    return revisions.recordLeadTransition(db, req.params.id, req.body.estado);
   }));
 
+  // Snapshots inmutables para conservar la historia de métricas importadas.
+  r.post('/metrics/snapshot', wrap(req => {
+    const postId = req.body?.post_id;
+    const row = db.prepare('SELECT * FROM metrics WHERE post_id=?').get(postId);
+    if (!row) throw Object.assign(new Error('No hay métricas para esa publicación'), { status: 404 });
+    const id = db.prepare('INSERT INTO metric_snapshots(post_id,snapshot_json) VALUES(?,?)')
+      .run(postId, JSON.stringify(row)).lastInsertRowid;
+    return { id: Number(id), post_id: Number(postId), captured_at: row.captured_at };
+  }));
+  r.get('/metrics/snapshots', wrap(req => req.query.post_id
+    ? db.prepare('SELECT * FROM metric_snapshots WHERE post_id=? ORDER BY id DESC').all(req.query.post_id)
+    : db.prepare('SELECT * FROM metric_snapshots ORDER BY id DESC').all()));
+
   // Análisis (confianza explícita, sin mezclar plataformas)
-  r.get('/analysis', wrap(req => analysis.analyze(db, { periodo: req.query.periodo })));
+  r.get('/analysis', wrap(req => analysis.analyze(db, req.query)));
 
   // Exportación: informe Markdown y JSON compatible con el constructor de carruseles
   r.get('/report.md', (req, res, next) => { try { res.type('text/markdown').send(exporter.reportMarkdown(db, { periodo: req.query.periodo })); } catch (e) { next(e); } });
@@ -137,7 +151,33 @@ function api(db) {
     : db.prepare('SELECT * FROM generated ORDER BY id DESC').all())));
   r.post('/generate', wrapAsync(req => content.generate(db, req.body, {})));
   r.post('/generate-package', wrapAsync(req => content.generatePackage(db, req.body, {})));
-  r.put('/generated/:id', wrap(req => content.setEstado(db, req.params.id, req.body.estado)));
+  r.put('/generated/:id', wrap(req => content.setEstado(db, req.params.id, req.body.estado, req.body.revisor || req.headers['x-reviewer'] || null)));
+  r.get('/generated/:id/versions', wrap(req => revisions.versions(db, req.params.id)));
+  r.get('/generated/:id/approvals', wrap(req => db.prepare('SELECT * FROM approval_events WHERE generated_id=? ORDER BY id DESC').all(req.params.id)));
+  r.get('/generated/:id/parts', wrap(req => db.prepare('SELECT * FROM generated_parts WHERE generated_id=? ORDER BY clip_number').all(req.params.id)));
+  r.get('/editorial-examples', wrap(() => db.prepare('SELECT * FROM editorial_examples ORDER BY id DESC').all()));
+  r.post('/editorial-examples', wrap(req => {
+    const b = req.body || {};
+    const generated = db.prepare("SELECT id,tipo,contenido,estado FROM generated WHERE id=?").get(b.generated_id);
+    if (!generated || generated.estado !== 'aprobado') throw Object.assign(new Error('Solo se puede guardar como ejemplo contenido aprobado'), { status: 400 });
+    if (!String(b.etiqueta || '').trim()) throw Object.assign(new Error('etiqueta es obligatoria'), { status: 400 });
+    const id = db.prepare('INSERT INTO editorial_examples(generated_id,tipo,etiqueta,contenido) VALUES(?,?,?,?)')
+      .run(generated.id, generated.tipo, String(b.etiqueta).trim(), generated.contenido).lastInsertRowid;
+    return { id: Number(id) };
+  }));
+  r.get('/generated/:id/publications', wrap(req => db.prepare('SELECT * FROM generated_publications WHERE generated_id=? ORDER BY published_at DESC').all(req.params.id)));
+  r.post('/generated/:id/publications', wrap(req => {
+    const generated = db.prepare('SELECT id,estado FROM generated WHERE id=?').get(req.params.id);
+    const post = db.prepare('SELECT id,plataforma FROM posts WHERE id=?').get(req.body?.post_id);
+    if (!generated || !post) throw Object.assign(new Error('Contenido o publicación inexistente'), { status: 404 });
+    if (generated.estado !== 'aprobado') throw Object.assign(new Error('Solo se puede vincular contenido aprobado'), { status: 400 });
+    const id = db.prepare('INSERT INTO generated_publications(generated_id,post_id,plataforma) VALUES(?,?,?) ON CONFLICT(generated_id,post_id) DO UPDATE SET published_at=CURRENT_TIMESTAMP')
+      .run(generated.id, post.id, post.plataforma).lastInsertRowid;
+    return { id: Number(id), generated_id: Number(generated.id), post_id: Number(post.id), plataforma: post.plataforma };
+  }));
+  r.post('/generated/:id/feedback', wrap(req => revisions.feedback(db, req.params.id, req.body || {})));
+  r.put('/generated/:id/edit', wrap(req => revisions.edit(db, req.params.id, req.body || {})));
+  r.post('/generated/:id/regenerate', wrapAsync(req => revisions.regenerate(db, req.params.id, req.body || {}, { content, fetchImpl: req.app?.locals?.fetchImpl })));
 
   // Plan editorial: propuesta calculada con señales observadas y límites explícitos.
   r.get('/plans/preview', wrap(req => planner.preview(db, req.query)));

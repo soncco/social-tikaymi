@@ -271,3 +271,17 @@ No identificado: cobertura porcentual, CI, pruebas de navegador/E2E, pruebas de 
 ## 18. Archivos de referencia inspeccionados
 
 `package.json`, `.env.example`, `.gitignore`, `README.md`, `CLAUDE.md`, `docs/Inicial.MD`, `docs/PLAN.md`, `docs/PROGRESS.md`, `docs/MANUAL.md`, `docs/CONECTAR-PLATAFORMAS.md`, `docs/CLASIFICACION-HISTORICA.md`, `src/server.js`, `src/api.js`, `src/db/index.js`, todos los módulos en `src/modules/`, todos los adaptadores en `src/adapters/`, `public/index.html`, `public/app.js`, `public/app.css`, el constructor y archivos auxiliares en `carruseles-claude-design/`, scripts y todos los archivos de `test/`.
+
+## Actualización 2026-10-03 (Etapa 1)
+
+Confirmado en el código: existe `content_packages` con contrato versionado, selección de fuentes aprobadas relacionadas, vínculo opcional `generated.package_id`, validación estricta para paquetes nuevos, metadatos de proveedor/modelo y una reparación automática acotada. Los registros `generated` anteriores siguen siendo legibles.
+
+Parcial: el paquete guarda una salida textual de copy asociada a la plataforma principal; adaptaciones independientes por cada plataforma destino todavía requieren una decisión de producto. El proveedor informa truncamiento y uso durante la ejecución, pero no existe un registro histórico separado de costos.
+
+No implementado en esta etapa: análisis contextual avanzado del calendario, workflow multiusuario de revisión/versiones y atribución posterior de resultados. Quedan documentados en `docs/PLAN.md` como etapas 2 y 3.
+
+### Actualización Etapa 3 (2026-10-04)
+
+Confirmado: existen versiones y feedback de borradores, regeneración localizada `slide:N`/`clip:N` cuando el formato es estructurable, partes verificables de guiones, snapshots de métricas, ejemplos editoriales aprobados y vínculos explícitos entre contenido aprobado y publicaciones reales.
+
+Pendiente: no existe todavía una vista analítica que compare automáticamente versiones con resultados posteriores ni autenticación multiusuario; `approval_events` conserva el revisor informado por la interfaz o cabecera.

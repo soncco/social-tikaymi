@@ -212,3 +212,23 @@ test('testimonios: sin testimonio autorizado la IA no puede inventarlos', async 
   await conClave(() => content.generate(d, { post_id: 1, tipo: 'copy', idioma: 'es' }, { fetchImpl: fakeFetch('x', cap) }));
   assert.match(cap.body.messages[0].content, /no hay ninguno autorizado/);
 });
+
+test('valida estrictamente paquetes nuevos y permite una reparación acotada', async () => {
+  const d = db();
+  aprobada(d);
+  const respuestas = ['### Clip 1\nDiálogo: “Hola”', '### Clip 1\nDiálogo: “Hola”\n### Clip 2\nDiálogo: “Viaja”\n### Clip 3\nDiálogo: “Escríbenos”'];
+  let llamadas = 0;
+  const fetchImpl = async () => ({ ok:true, status:200, json:async () => ({ content:[{ type:'text', text:respuestas[Math.min(llamadas++, 1)] }] }) });
+  const result = await conClave(() => content.generate(d, { post_id:1, tipo:'guion', idioma:'es', strict:true }, { fetchImpl, save:false }));
+  assert.equal(result.estado, 'revision');
+  assert.equal(llamadas, 2);
+});
+
+test('selecciona solo fuentes aprobadas relacionadas con el producto', () => {
+  const d = db();
+  aprobada(d, { titulo:'Tour Humantay', texto:'Laguna Humantay' });
+  aprobada(d, { titulo:'Tour Amazonía', texto:'Selva peruana' });
+  const selected = content.selectContext(d, { titulo:'Humantay', tema:'laguna', producto:'Humantay' });
+  assert.equal(selected.info.length, 1);
+  assert.match(selected.info[0].titulo, /Humantay/);
+});

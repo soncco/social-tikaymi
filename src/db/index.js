@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS posts(
 CREATE TABLE IF NOT EXISTS metrics(
   post_id INTEGER PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE, captured_at TEXT DEFAULT CURRENT_TIMESTAMP,
   ${METRICS.map(m => m + ' REAL').join(', ')});
+CREATE TABLE IF NOT EXISTS metric_snapshots(
+  id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  captured_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, snapshot_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS leads(
   id INTEGER PRIMARY KEY, post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL, campaign_code TEXT,
   fuente TEXT, estado TEXT NOT NULL DEFAULT 'nuevo', fecha_viaje TEXT, viajeros INTEGER, notas TEXT,
@@ -47,6 +50,41 @@ CREATE TABLE IF NOT EXISTS generated(
   id INTEGER PRIMARY KEY, post_id INTEGER REFERENCES posts(id) ON DELETE CASCADE, tipo TEXT NOT NULL,
   idioma TEXT NOT NULL, contenido TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'revision',
   created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS generated_revisions(
+  id INTEGER PRIMARY KEY, generated_id INTEGER NOT NULL REFERENCES generated(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL, contenido TEXT NOT NULL, segmento TEXT, motivo TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(generated_id, version));
+CREATE TABLE IF NOT EXISTS generated_feedback(
+  id INTEGER PRIMARY KEY, generated_id INTEGER NOT NULL REFERENCES generated(id) ON DELETE CASCADE,
+  segmento TEXT, motivo TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS lead_status_history(
+  id INTEGER PRIMARY KEY, lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  estado_anterior TEXT, estado_nuevo TEXT NOT NULL, changed_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS content_packages(
+  id INTEGER PRIMARY KEY, contract_version INTEGER NOT NULL DEFAULT 1,
+  post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+  plan_idea_id INTEGER REFERENCES plan_ideas(id) ON DELETE SET NULL,
+  brief_json TEXT NOT NULL, concept_json TEXT NOT NULL, primary_json TEXT NOT NULL,
+  sources_json TEXT NOT NULL, resources_json TEXT NOT NULL,
+  cta TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}', warnings_json TEXT NOT NULL,
+  pending_json TEXT NOT NULL, validations_json TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS generated_parts(
+  id INTEGER PRIMARY KEY, generated_id INTEGER NOT NULL REFERENCES generated(id) ON DELETE CASCADE,
+  clip_number INTEGER NOT NULL, funcion TEXT, duracion TEXT, audio TEXT, dialogo TEXT,
+  prompt_flow TEXT, contenido TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(generated_id, clip_number));
+CREATE TABLE IF NOT EXISTS editorial_examples(
+  id INTEGER PRIMARY KEY, generated_id INTEGER NOT NULL REFERENCES generated(id) ON DELETE SET NULL,
+  tipo TEXT NOT NULL, etiqueta TEXT NOT NULL, contenido TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS generated_publications(
+  id INTEGER PRIMARY KEY, generated_id INTEGER NOT NULL REFERENCES generated(id) ON DELETE CASCADE,
+  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE, plataforma TEXT NOT NULL,
+  published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(generated_id, post_id));
+CREATE TABLE IF NOT EXISTS approval_events(
+  id INTEGER PRIMARY KEY, generated_id INTEGER NOT NULL REFERENCES generated(id) ON DELETE CASCADE,
+  estado TEXT NOT NULL, revisor TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS editorial_plans(
   id INTEGER PRIMARY KEY, cadence TEXT NOT NULL, objetivo_negocio TEXT NOT NULL,
   method TEXT NOT NULL DEFAULT 'analisis', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
@@ -93,6 +131,10 @@ function migrate(db) {
   if (!auditCols.includes('manually_modified_at')) db.exec('ALTER TABLE post_classification_audit ADD COLUMN manually_modified_at TEXT');
   const generatedCols = db.prepare('PRAGMA table_info(generated)').all().map(c => c.name);
   if (!generatedCols.includes('plan_idea_id')) db.exec('ALTER TABLE generated ADD COLUMN plan_idea_id INTEGER REFERENCES plan_ideas(id) ON DELETE SET NULL');
+  if (!generatedCols.includes('package_id')) db.exec('ALTER TABLE generated ADD COLUMN package_id INTEGER REFERENCES content_packages(id) ON DELETE SET NULL');
+  const packageCols = db.prepare('PRAGMA table_info(content_packages)').all().map(c => c.name);
+  if (packageCols.length && !packageCols.includes('primary_json')) db.exec("ALTER TABLE content_packages ADD COLUMN primary_json TEXT NOT NULL DEFAULT '{}'");
+  if (packageCols.length && !packageCols.includes('metadata_json')) db.exec("ALTER TABLE content_packages ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'");
   const ideaCols = db.prepare('PRAGMA table_info(plan_ideas)').all().map(c => c.name);
   if (!ideaCols.includes('planned_for')) db.exec('ALTER TABLE plan_ideas ADD COLUMN planned_for TEXT');
   if (!ideaCols.includes('source_url')) db.exec('ALTER TABLE plan_ideas ADD COLUMN source_url TEXT');

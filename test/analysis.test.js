@@ -44,7 +44,8 @@ test('confianza por umbrales (§6)', () => {
   assert.equal(confianza(10, 30, 0), 'patron_probable');
   assert.equal(confianza(19, 30, 5), 'patron_probable');
   assert.equal(confianza(20, 30, 0), 'patron_probable', '>=20 pero sin leads atribuidos no confirma');
-  assert.equal(confianza(20, 30, 1), 'patron_confirmado');
+  assert.equal(confianza(20, 30, 1), 'patron_probable', 'un solo lead no confirma un patrón');
+  assert.equal(confianza(20, 30, 3), 'patron_confirmado');
 
   const db = open(':memory:');
   for (let i = 1; i <= 4; i++) addPost(db, { plataforma: 'tiktok', fecha: dia(i * 5), tema: 'lagunas' }, { retention: 0.5 });
