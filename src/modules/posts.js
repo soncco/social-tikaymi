@@ -5,8 +5,13 @@ const ENUMS = { plataforma: C.PLATAFORMAS, objetivo_negocio: C.OBJETIVOS_NEGOCIO
 const FIELDS = [...REQUIRED, 'external_id', 'fecha', 'formato', 'tema', 'campaign_code', 'estado'];
 const BULK_FIELDS = ['objetivo_negocio', 'objetivo_marketing', 'objetivo_contenido', 'audiencia', 'etapa_embudo', 'cta', 'metrica_principal', 'idioma', 'formato', 'tema', 'campaign_code'];
 const CLASSIFICATION_FIELDS = ['objetivo_negocio', 'objetivo_marketing', 'objetivo_contenido', 'audiencia', 'etapa_embudo', 'cta', 'metrica_principal', 'idioma'];
+// Para incluir una publicación en comparaciones de negocio solo necesitamos
+// saber qué resultado buscaba, para quién y en qué idioma. El resto enriquece
+// el análisis/editorial, pero no debe bloquear al usuario histórico.
+const ANALYSIS_CONTEXT_FIELDS = ['objetivo_negocio', 'audiencia', 'idioma'];
 const AUDITED_FIELDS = [...CLASSIFICATION_FIELDS, 'tema'];
 const missingClassification = post => CLASSIFICATION_FIELDS.filter(k => !String(post[k] ?? '').trim() || post[k] === 'sin_clasificar');
+const missingAnalysisContext = post => ANALYSIS_CONTEXT_FIELDS.filter(k => !String(post[k] ?? '').trim() || post[k] === 'sin_clasificar');
 
 // Regla del documento: no existe publicación sin objetivo, audiencia, etapa, CTA, métrica, plataforma e idioma.
 function validate(body) {
@@ -85,4 +90,4 @@ function bulkUpdate(db, ids, body, { overwrite = false } = {}) {
   })();
 }
 
-module.exports = { create, update, bulkUpdate, validate, missingClassification };
+module.exports = { create, update, bulkUpdate, validate, missingClassification, missingAnalysisContext, ANALYSIS_CONTEXT_FIELDS };

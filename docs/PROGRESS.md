@@ -76,6 +76,7 @@ La base real contiene 50 publicaciones de Meta con métricas: 25 de Instagram y 
 - `generatePackage()` conserva los filtros del plan (`editorial_plans.filtros_json`) al construir el resumen analítico del prompt.
 - La regeneración usa indexación humana: `slide:1` es la primera diapositiva. Las ideas sin `post_id` reenvían `plan_idea_id` para resolver su brief.
 - La importación CSV y la sincronización Meta crean snapshots de métricas solo cuando cambia el JSON observado; las repeticiones no duplican snapshots.
+- La clasificación histórica distingue contexto mínimo de análisis (resultado comercial, audiencia e idioma) de metadata editorial avanzada. La pantalla ya no bloquea por CTA, etapa, propósito, objetivo de marketing o métrica; esos campos siguen disponibles como enriquecimiento opcional.
 - Un paquete con varios destinos genera una salida de copy por plataforma y las guarda como filas `generated` relacionadas con el mismo paquete.
 - La API y la vista de borradores exponen versiones, feedback, partes de guion, regeneración, aprobaciones, ejemplos editoriales, snapshots y publicaciones vinculadas. La regeneración solicita explícitamente `slide:N`, `clip:N` o pieza completa.
 - En esta revisión `npm test` ejecuta 105 pruebas: 98 pasan y 7 fallan exclusivamente al abrir servidores HTTP (`listen EPERM`) en el entorno restringido. Los tests unitarios de contenido, planner, análisis, importación/snapshots y revisiones pasan. `node --check` pasa para backend y frontend.
