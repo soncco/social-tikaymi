@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Tikaymi · Imagen única</title>
+<link rel="stylesheet" href="app.css"><script src="visual-contract.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Tokens y plantillas copiados del constructor de carruseles: la imagen única debe verse de la misma familia. */
+:root{--t-paper:#FAF6F0;--t-paper-alt:#F4EDE2;--t-ink:#1A2E2D;--t-ink-soft:#4A5958;--t-ink-mute:#8A8578;--t-line:#E4DBC9;--t-line-strong:#C9BFA8;--t-teal:#0E6462;--t-teal-deep:#0A4947;--t-orange:#CD572B;--t-lime:#A2C357;--t-serif:"Cormorant Garamond",Georgia,serif;--t-sans:"Raleway",Helvetica,Arial,sans-serif;--t-mono:"IBM Plex Mono",monospace}
+.t-header{padding:22px 32px;background:var(--t-teal-deep);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.t-header-brand{display:flex;align-items:baseline;gap:12px}.t-header-mark{font:italic 400 26px var(--t-serif)}.t-header-sub{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#DCE9CB}
+.t-header nav{display:flex;flex-direction:row;width:auto;position:static;gap:10px;flex-wrap:wrap;margin:0;padding:0;background:none}.t-header nav a{display:inline-block}.t-header nav a{color:#fff;border:1px solid rgba(255,255,255,.55);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;text-decoration:none}
+main{max-width:1440px;margin:0 auto;padding:28px 24px 80px}.editor-head{margin:0 0 22px}.editor-head h1{font:500 32px/1.1 var(--t-serif);color:var(--t-teal-deep);margin:0 0 8px}.editor-head p{color:#687875;max-width:800px;margin:0}
+.editor-layout{display:grid;grid-template-columns:minmax(360px,460px) minmax(0,1fr);gap:22px;align-items:start}.editor-controls{min-width:0}.preview-panel{position:sticky;top:14px;min-width:0}.preview-panel h2{margin-top:0}
+.photo-controls{display:grid;grid-template-columns:1fr;gap:14px;margin:18px 0}.photo-controls label{min-width:0}.photo-controls .muted{margin:0}
+.preview{overflow:auto;background:#8f8b83;border-radius:12px;padding:18px;max-height:calc(100vh - 130px)}#preview-frame{position:relative;margin:0 auto}.preview #canvas{position:absolute;left:0;top:0;margin:0;transform:scale(var(--preview-scale,.5));transform-origin:top left}
+.editor-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:14px 0}.editor-actions button{margin:0}.editor-details{margin:18px 0}.editor-details .form{padding-top:16px}.editor-details p{grid-column:1/-1}
+.pending-list{margin:8px 0 0;padding-left:20px}#copies pre{white-space:pre-wrap}
+
+/* ---- lienzo 1080 × 1350 (mismas reglas que .slide del constructor) ---- */
+.canvas{position:relative;width:1080px;height:1350px;overflow:hidden;background:var(--t-paper);color:var(--t-ink);display:flex;flex-direction:column;font-family:var(--t-sans);text-align:left}
+.canvas *{box-sizing:border-box;margin:0}
+.canvas .t-photo{position:relative;overflow:hidden;background:var(--t-paper-alt)}
+.canvas .t-photo-img{position:absolute;inset:0;background-position:center;background-size:cover;background-repeat:no-repeat}
+.canvas .t-ph{position:relative;overflow:hidden;background:repeating-linear-gradient(135deg,#E7DECD 0 14px,#EFE7D8 14px 28px)}
+.canvas .t-ph-note{position:absolute;inset:auto 40px 40px 40px;font:400 19px/1.5 var(--t-mono);color:#5d5647;background:rgba(250,246,240,.92);padding:16px 18px;border-left:3px solid var(--t-orange)}
+.canvas .t-ph-note b{font-weight:500;letter-spacing:.1em;display:block;margin-bottom:6px;color:var(--t-orange)}
+.canvas .t-full{position:absolute;inset:0}.canvas .t-full>div{width:100%;height:100%}
+.canvas .t-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(10,30,29,.88) 0%,rgba(10,30,29,.46) 44%,rgba(10,30,29,.05) 74%)}
+.canvas.testimonio .t-overlay{background:linear-gradient(to top,rgba(10,30,29,.9) 0%,rgba(10,30,29,.6) 55%,rgba(10,30,29,.32) 100%)}
+.canvas .t-eyebrow{font:400 21px var(--t-mono);letter-spacing:.22em;text-transform:uppercase;color:var(--t-teal)}
+.canvas .t-eyebrow.on-dark{color:#DCE9CB}
+.canvas .t-badge{display:inline-block;font:400 20px var(--t-mono);letter-spacing:.16em;text-transform:uppercase;color:#fff;background:var(--t-orange);padding:12px 20px}
+.canvas .t-rule{height:1px;background:var(--t-line)}
+.canvas .t-h1{font:400 100px/1.0 var(--t-serif);letter-spacing:-.015em;max-width:880px}
+.canvas .t-body{font-size:31px;line-height:1.55;color:var(--t-ink-soft);max-width:780px}
+.canvas .t-body.on-dark{color:rgba(255,255,255,.9)}
+.canvas .t-ridge{display:block;width:200px;height:26px;overflow:visible}.canvas .t-ridge path{fill:none;stroke:var(--t-lime);stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+.canvas .t-cta{display:inline-flex;align-items:center;align-self:flex-start;background:var(--t-orange);color:#fff;padding:24px 36px;font-size:28px;font-weight:600}
+.canvas .t-quote-mark{font:400 220px/.7 var(--t-serif);color:var(--t-lime)}
+.canvas .t-quote{font:400 72px/1.2 var(--t-serif);letter-spacing:-.01em;color:#fff;max-width:900px;margin-top:-30px}
+.canvas .t-by{font:400 24px var(--t-mono);letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.8);margin-top:36px}
+.canvas .t-foot{position:absolute;left:88px;right:88px;bottom:64px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.canvas .t-logo{height:78px;width:auto;display:block}.canvas .t-logo.on-photo{background:var(--t-paper);padding:14px 20px;height:106px}
+.canvas .t-site{font:400 22px var(--t-mono);letter-spacing:.16em;text-transform:lowercase;color:var(--t-ink-mute)}.canvas .t-site.on-dark{color:rgba(255,255,255,.78)}
+/* producto = Portada foto a sangre · testimonio = Cita */
+.canvas .t-bottom{position:relative;margin-top:auto;padding:88px 88px 250px;display:flex;flex-direction:column}
+.canvas .t-ridge-row{display:flex;align-items:center;gap:40px}
+/* informativo = Portada editorial */
+.canvas.informativo{background:var(--t-paper-alt)}
+.canvas .t-editorial{padding:100px 88px 0;display:flex;flex-direction:column}
+.canvas .t-editorial-photo{flex:1 1 0;min-height:240px;margin-bottom:190px}
+@media(max-width:980px){.editor-layout{grid-template-columns:minmax(300px,390px) minmax(0,1fr);gap:14px}.preview{padding:10px}}
+@media(max-width:760px){main{padding:16px}.editor-layout{grid-template-columns:1fr}.preview-panel{position:static}.preview{max-height:75vh}}
+</style></head><body>
+<header class="t-header"><div class="t-header-brand"><span class="t-header-mark">Tikaymi</span><span class="t-header-sub">Imagen única · un PNG</span></div><nav aria-label="Otros formatos"><a href="/constructor/Tikaymi%20-%20Constructor%20de%20Carruseles.html">Constructor de carruseles</a><a href="/">Volver a Tikaymi Lab</a></nav></header>
+<main>
+<header class="editor-head"><h1>Revisión visual de la imagen única</h1><p>Usa las mismas plantillas que el constructor de carruseles: producto como portada con foto a sangre, informativo como portada editorial y testimonio como cita. Es una pieza independiente, sin numeración. Los borradores se crean en Tikaymi Lab → Contenido → Crear con IA → Imagen única + copy.</p></header>
+<div class="editor-layout"><section class="editor-controls"><section class="card"><h2>Fotografía</h2><div class="photo-controls"><label>Selecciona una foto autorizada de la biblioteca<select id="photo"><option value="">— Fotografía pendiente —</option></select></label><label>O pega la URL de una foto<input id="photo-url" type="url" inputmode="url" placeholder="https://…"></label><p class="muted">La URL debe corresponder a una foto registrada y autorizada en Configuración → Biblioteca. Debe ser pública y permitir CORS para exportar el PNG. La vista previa se actualiza al cambiarla.</p></div><label>Cargar un paquete JSON de imagen única (opcional)<input type="file" id="file" accept=".json"></label></section>
+<section id="pending-card" class="card" hidden><h2>Datos que faltan</h2><ul id="pending-summary" class="pending-list"></ul><p class="muted">Cada dato bloquea la aprobación porque la imagen podría afirmarlo sin respaldo. Si el dato existe, regístralo en Configuración → Biblioteca y corrige el texto; si la imagen no lo menciona, retíralo abajo en «Datos pendientes». La fotografía se resuelve en el bloque superior.</p></section>
+<details class="card editor-details" id="text-details"><summary>Ajustar textos y resolver pendientes</summary><div class="form"><label>Titular · hasta 8 palabras<input id="headline"></label><label>Apoyo · hasta 12 palabras<textarea id="support" rows="2"></textarea></label><label>CTA visual opcional · hasta 5 palabras<input id="visualCta"></label><label>Texto alternativo<textarea id="alt" rows="2"></textarea></label><label>Datos pendientes · uno por línea<textarea id="pending-data" rows="4"></textarea></label><p>Retira un pendiente solo después de comprobarlo o si la imagen no lo afirma. En testimonios, conserva la cita literal autorizada.</p></div></details>
+<div class="editor-actions"><button id="save-photo" class="primary">Guardar foto y textos para revisar</button><button id="download" class="secondary" disabled>Descargar PNG individual</button></div><p id="status" role="status" class="notice info"></p><h2>Copy por plataforma</h2><div id="copies"></div></section><aside class="preview-panel"><h2>Vista previa en vivo</h2><div class="preview"><div id="preview-frame"><article id="canvas" class="canvas"></article></div></div></aside></div></main><script src="imagen-unica.js"></script></body></html>

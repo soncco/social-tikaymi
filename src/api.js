@@ -19,6 +19,7 @@ const planner = require('./modules/planner');
 const site = require('./modules/site');
 const editorialStrategy = require('./modules/editorial-strategy');
 const revisions = require('./modules/revisions');
+const visualReview = require('./modules/visual-review');
 const metricsMod = require('./modules/metrics');
 
 const wrap = fn => (req, res, next) => { try { res.json(fn(req, res) ?? { ok: true }); } catch (e) { next(e); } };
@@ -130,8 +131,13 @@ function api(db) {
     const b = req.body;
     if (!C.ASSET_TIPOS.includes(b.tipo)) throw Object.assign(new Error(`tipo inválido: ${b.tipo}`), { status: 400 });
     if (!String(b.url ?? '').trim()) throw Object.assign(new Error('url es obligatoria'), { status: 400 });
-    return { id: db.prepare('INSERT INTO assets(tipo,url,descripcion,destino) VALUES(?,?,?,?)')
-      .run(b.tipo, b.url, b.descripcion ?? null, b.destino ?? null).lastInsertRowid };
+    return { id: db.prepare('INSERT INTO assets(tipo,url,descripcion,destino,autorizado_publicar) VALUES(?,?,?,?,?)')
+      .run(b.tipo, b.url, b.descripcion ?? null, b.destino ?? null, b.autorizado_publicar===true ? 1 : 0).lastInsertRowid };
+  }));
+  r.put('/assets/:id/approve', wrap(req=> {
+    const result=db.prepare('UPDATE assets SET autorizado_publicar=? WHERE id=?').run(req.body.autorizado_publicar===true?1:0,req.params.id);
+    if(!result.changes)throw Object.assign(new Error('Recurso inexistente'),{status:404});
+    return {ok:true};
   }));
   r.delete('/assets/:id', wrap(req => db.prepare('DELETE FROM assets WHERE id=?').run(req.params.id) && undefined));
 
@@ -147,9 +153,11 @@ function api(db) {
   // Fase 2 — Generación con IA (siempre queda en revisión; aprobación humana manual)
   r.get('/generated', wrap(req => (req.query.post_id
     ? db.prepare('SELECT * FROM generated WHERE post_id=? ORDER BY id DESC').all(req.query.post_id)
-    : db.prepare('SELECT * FROM generated ORDER BY id DESC').all())));
+    : db.prepare('SELECT * FROM generated ORDER BY id DESC').all()).map(row=>({...row,visual_review:['imagen_unica','carrusel'].includes(row.tipo)?visualReview.inspect(db,row):null}))));
   r.post('/generate', wrapAsync(req => content.generate(db, req.body, {})));
   r.post('/generate-package', wrapAsync(req => content.generatePackage(db, req.body, {})));
+  r.get('/visual-failures', wrap(() => db.prepare('SELECT * FROM failed_visual_reviews ORDER BY id DESC LIMIT 30').all()));
+  r.post('/generated/:id/render-validation', wrap(req => visualReview.record(db,req.params.id,req.body)));
   r.put('/generated/:id', wrap(req => content.setEstado(db, req.params.id, req.body.estado, req.body.revisor || req.headers['x-reviewer'] || null)));
   r.get('/generated/:id/versions', wrap(req => revisions.versions(db, req.params.id)));
   r.get('/generated/:id/approvals', wrap(req => db.prepare('SELECT * FROM approval_events WHERE generated_id=? ORDER BY id DESC').all(req.params.id)));

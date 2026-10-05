@@ -33,6 +33,7 @@ test('DeepSeek usa su endpoint con formato chat y devuelve texto', () => conEnv(
   const r = await llm.complete(d, { sistema: 'S', prompt: 'P' }, fake({ choices: [{ message: { content: ' hola ' } }] }, cap));
   assert.equal(cap.url, 'https://api.deepseek.com/chat/completions');
   assert.equal(cap.opts.headers.authorization, 'Bearer k');
+  assert.deepEqual(cap.body.thinking, { type:'disabled' });
   assert.equal(cap.body.messages[0].role, 'system');
   assert.deepEqual([r.texto, r.provider], ['hola', 'deepseek']);
 }));
@@ -49,4 +50,16 @@ test('429 y respuestas sin texto se reportan claramente', () => conEnv({ ANTHROP
   const d = open(':memory:');
   await assert.rejects(llm.complete(d, { sistema: 'S', prompt: 'P' }, async () => ({ ok: false, status: 429, text: async () => '' })), e => e.status === 429);
   await assert.rejects(llm.complete(d, { sistema: 'S', prompt: 'P' }, fake({ content: [] })), e => e.status === 502);
+}));
+
+test('recupera una respuesta DeepSeek con reasoning pero content vacío sin guardar el razonamiento', () => conEnv({ DEEPSEEK_API_KEY: 'k' }, async () => {
+  const d = open(':memory:'); llm.configure(d, { provider:'deepseek', model:'deepseek-flash' });
+  let calls = 0;
+  const fetchImpl = async () => ({ ok:true, json:async () => calls++ === 0
+    ? { choices:[{ message:{ content:'', reasoning_content:'interno' }, finish_reason:'length' }] }
+    : { choices:[{ message:{ content:'{\"tipo\":\"producto\"}' }, finish_reason:'stop' }] } });
+  const result = await llm.complete(d, { sistema:'S', prompt:'P' }, fetchImpl, { maxTokens:2500 });
+  assert.equal(result.texto, '{"tipo":"producto"}');
+  assert.equal(result.recovered_empty, true);
+  assert.equal(calls, 2);
 }));

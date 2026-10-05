@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>Fixture visual ficticio</title>
+<pre id="result">RUNNING</pre><iframe id="frame" style="width:1200px;height:1600px"></iframe>
+<script>
+const frame=document.getElementById('frame');
+async function run(){
+  try {
+    const w=frame.contentWindow;
+    const fixture={format:'imagen_unica',version:1,tipo:'producto',plataforma:'instagram',idioma:'es',resource:{url:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'},visual:{headline:'Planifica tu primer viaje a Cusco',support:'Decide qué reservar primero con orientación personalizada',visualCta:'Consulta tus fechas'},alt:'Imagen ficticia para tests',cta:{text:'Consulta tus fechas',destination:''},warnings:[],pending:[]};
+    const results=[];
+    for(const tipo of ['producto','informativo','testimonio']) {
+      const item=structuredClone(fixture);item.tipo=tipo;
+      if(tipo==='testimonio'){item.testimonial={quote:'Planificaron nuestro viaje con cuidado.',by:'Fixture ficticio'};item.visual.support=item.testimonial.quote;}
+      await w.show(item,{resources:[fixture.resource.url],testimonials:[item.testimonial?.quote]});
+      const check=w.TikaymiVisual.validateRender(w.document.getElementById('canvas'));
+      if(!check.ok)throw new Error(tipo+': '+check.errors.join(';'));
+      results.push(tipo+': PASS');
+    }
+    w.document.querySelector('#canvas h1, #canvas .t-quote').textContent='texto '.repeat(300);
+    if(w.TikaymiVisual.validateRender(w.document.getElementById('canvas')).ok)throw new Error('No detecta texto desbordado');
+    results.push('overflow: PASS');document.getElementById('result').textContent=results.join('\n');
+  }catch(e){document.getElementById('result').textContent='FAIL: '+e.message;}
+}
+fetch('../public/imagen-unica.html').then(res=>res.text()).then(html=>{
+  frame.onload=run;
+  frame.srcdoc='<base href="'+new URL('../public/',location.href).href+'">'+html.replace(/<script src="https:[^"]+"><\/script>/g,'');
+}).catch(e=>document.getElementById('result').textContent='FAIL: '+e.message);
+</script>

@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<script src="../public/visual-contract.js"></script>
 <style>
 :root{
   --paper:#FAF6F0;--paper-alt:#F4EDE2;--ink:#1A2E2D;--ink-soft:#4A5958;--ink-mute:#8A8578;
@@ -23,10 +24,12 @@ a{color:var(--teal)}
 button{font-family:inherit;cursor:pointer}
 
 /* ================= APP SHELL ================= */
-.app-header{padding:22px 32px;background:var(--teal-deep);color:#fff;display:flex;align-items:center}
+.app-header{padding:22px 32px;background:var(--teal-deep);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .app-header-brand{display:flex;align-items:baseline;gap:12px}
 .app-header-mark{font-family:var(--serif);font-style:italic;font-size:26px}
 .app-header-sub{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#DCE9CB}
+.app-header-visuals{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:#DCE9CB}
+.app-header-visuals a{color:#fff;border-color:rgba(255,255,255,.55)}
 .app-shell{max-width:1320px;margin:0 auto;padding:28px 24px 80px}
 .app-steps-nav{list-style:none;display:flex;gap:0;margin-bottom:28px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--paper)}
 .app-steps-nav li{flex:1;text-align:center;padding:14px 10px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-mute);border-right:1px solid var(--line);cursor:pointer}
@@ -208,6 +211,10 @@ h2{font-family:var(--serif);font-weight:500;font-size:28px;margin-bottom:18px}
     <span class="app-header-mark">Tikaymi</span>
     <span class="app-header-sub">Constructor de Carruseles</span>
   </div>
+  <nav class="app-header-visuals" aria-label="Formatos visuales">
+    <span>Crear otro formato:</span>
+    <a class="btn ghost" href="../public/imagen-unica.html" title="Imagen única tiene un editor y una descarga PNG propios">Imagen única · PNG</a>
+  </nav>
 </header>
 
 <main class="app-shell">
@@ -218,7 +225,16 @@ h2{font-family:var(--serif);font-weight:500;font-size:28px;margin-bottom:18px}
   </ol>
 
   <section id="step-setup" class="step active">
-    <h2>Configura tu carrusel</h2>
+    <h2>Elige qué pieza visual quieres crear</h2>
+    <div class="field">
+      <label for="setup-formato">Formato</label>
+      <select id="setup-formato">
+        <option value="carrusel">Carrusel de varias diapositivas</option>
+        <option value="imagen_unica">Imagen única · un PNG</option>
+      </select>
+      <p class="muted" id="setup-formato-help">El carrusel tiene varias diapositivas y se edita aquí.</p>
+    </div>
+    <div id="carousel-setup-fields">
     <div class="field">
       <label>Tipo de carrusel</label>
       <select id="setup-tipo">
@@ -233,6 +249,11 @@ h2{font-family:var(--serif);font-weight:500;font-size:28px;margin-bottom:18px}
     <button id="btn-create" class="btn primary">Crear carrusel</button>
     <button id="btn-load-setup" class="btn ghost" style="margin-left:10px">Cargar archivo</button>
     <button id="btn-paste-setup" class="btn ghost">Pegar JSON / YAML</button>
+    </div>
+    <div id="single-image-setup" hidden>
+      <p class="muted">La imagen única no es una diapositiva: tiene editor y descarga PNG propios. Ábrela desde Tikaymi Lab para revisar borradores y usar las fotos autorizadas.</p>
+      <a id="btn-open-single-image" class="btn primary" href="../public/imagen-unica.html">Abrir editor de imagen única</a>
+    </div>
   </section>
 
   <section id="step-edit" class="step">
@@ -1005,7 +1026,81 @@ function buildPreview(){
 
     thumbsContainer.appendChild(item);
   });
+  if(labGeneratedId){
+    const save=el('button',{class:'btn secondary',type:'button',text:'Guardar cambios en Lab y revisar'});
+    save.addEventListener('click',async()=>{
+      try{
+        const data=JSON.parse(labContent);data.slides=state.slides;data.tipo=state.tipo;
+        const contenido=JSON.stringify(data,null,2);
+        const res=await fetch('/api/generated/'+labGeneratedId+'/edit',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({contenido,segmento:'pieza',motivo:'Corrección humana en constructor visual'})});
+        if(!res.ok)throw new Error((await res.json()).error);
+        labContent=contenido;labInitialSlides=JSON.stringify(state.slides);
+        await checkLabRender();alert('Guardado en revisión. Vuelve a Lab para aprobar humanamente.');
+      }catch(e){alert(e.message);}
+    });
+    thumbsContainer.appendChild(save);
+  }
+  checkLabRender().catch(e=>alert('No se pudo comprobar la composición: '+e.message));
 }
+
+let labGeneratedId=null, labContent=null, labInitialSlides=null, labRepairUsed=false;
+async function checkImages(node){
+  const urls=[...node.querySelectorAll('.photo-img')].map(el=>getComputedStyle(el).backgroundImage.match(/^url\(["']?(.*?)["']?\)$/)?.[1]).filter(Boolean);
+  const errors=[];
+  if(labGeneratedId){
+    try{
+      const res=await fetch('/api/assets');
+      if(!res.ok)throw new Error('Inicia sesión para revisar recursos');
+      const allowed=new Set((await res.json()).filter(x=>x.tipo==='foto' && x.autorizado_publicar).map(x=>x.url));
+      if(urls.some(url=>!allowed.has(url)))errors.push('Fotografía no autorizada: autorízala en Biblioteca antes de exportar.');
+    }catch(e){errors.push(e.message);}
+  }
+  await Promise.all(urls.map(url=>new Promise(resolve=>{
+    const img=new Image();img.crossOrigin='anonymous';
+    const timer=setTimeout(()=>{errors.push('Fotografía no disponible: revisa URL/CORS');resolve();},10000);
+    img.onload=()=>{clearTimeout(timer);resolve();};img.onerror=()=>{clearTimeout(timer);errors.push('Fotografía no disponible: revisa URL/CORS');resolve();};img.src=url;
+  })));
+  return errors;
+}
+async function checkLabRender(){
+  if(!labGeneratedId)return;
+  const checkedContent=labContent, checkedSlides=JSON.stringify(state.slides);
+  if(document.fonts) await document.fonts.ready;
+  const nodes=[...document.querySelectorAll('#export-container > div')];
+  const errors=TikaymiVisual.validateCarousel({slides:state.slides}).errors;
+  for(const node of nodes)errors.push(...await checkImages(node));
+  if(checkedContent!==labContent || checkedSlides!==JSON.stringify(state.slides))return;
+  nodes.forEach((node,i)=>{
+    errors.push(...TikaymiVisual.validateRender(node).errors.map(e=>'Diapositiva '+(i+1)+': '+e));
+    if(node.querySelector('.ph')) errors.push('Diapositiva '+(i+1)+': fotografía pendiente');
+  });
+  if(JSON.stringify(state.slides)!==labInitialSlides)errors.push('Cambiaste el contenido en el constructor: guarda la versión corregida en Lab antes de aprobar.');
+  const res=await fetch('/api/generated/'+labGeneratedId+'/render-validation',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({contenido:labContent,errors})});
+  if(!res.ok) errors.push((await res.json()).error);
+  const key='visual-repair-'+labGeneratedId;
+  if(errors.some(e=>/cortado|solapa|máximo/.test(e)) && !labRepairUsed && !sessionStorage.getItem(key)){
+    sessionStorage.setItem(key,'1');
+    const retry=await fetch('/api/generated/'+labGeneratedId+'/regenerate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({segmento:'pieza',automatic_visual_repair:true,instruccion:'Acorta el texto para resolver estos errores del render; conserva mensaje, fotos, idioma y CTA: '+errors.join('; ')})});
+    if(retry.ok){location.reload();return;}
+    errors.push((await retry.json()).error);
+  }
+  if(errors.length)alert('Revisión visual pendiente:\n'+errors.join('\n'));
+}
+
+window.addEventListener('DOMContentLoaded',async()=>{
+  const id=new URLSearchParams(location.search).get('id');
+  if(!id)return;
+  try{
+    const res=await fetch('/api/generated');
+    if(!res.ok)throw new Error('Inicia sesión en Tikaymi Lab');
+    const item=(await res.json()).find(x=>String(x.id)===id);
+    if(!item)throw new Error('Borrador inexistente');
+    const parsed=parseCarouselText(item.contenido);
+    state.tipo=parsed.tipo;state.slides=parsed.slides;
+    labGeneratedId=id;labContent=item.contenido;labInitialSlides=JSON.stringify(state.slides);labRepairUsed=!!item.visual_repair_used;
+    renderEditStep();buildPreview();goToStep('preview');
+  }catch(err){alert(err.message);}
+});
 
 function fileName(i){
   const format = document.getElementById('export-format').value;
@@ -1015,6 +1110,13 @@ function fileName(i){
 
 async function downloadSlide(i){
   const node = document.getElementById('export-slide-'+i);
+  if(document.fonts) await document.fonts.ready;
+  const contentCheck = TikaymiVisual.validateCarousel({slides:[state.slides[i]]});
+  const renderCheck = TikaymiVisual.validateRender(node);
+  const errors = [...contentCheck.errors, ...renderCheck.errors];
+  errors.push(...await checkImages(node));
+  if(node.querySelector('.ph')) errors.push('Fotografía pendiente: reemplaza el marcador antes de exportar.');
+  if(errors.length){ alert('Revisión fallida. Acorta o corrige el contenido y vuelve a revisar:\n'+errors.join('\n')); return; }
   const canvas = await html2canvas(node, {backgroundColor:'#ffffff', useCORS:true, allowTaint:false, imageTimeout:0, scale:1, width:1080, height:1350, windowWidth:1080, windowHeight:1350});
   const format = document.getElementById('export-format').value;
   const mime = format==='jpeg' ? 'image/jpeg' : 'image/png';
@@ -1161,6 +1263,21 @@ function loadCarouselFromText(text){
 
 /* ---------------- wiring ---------------- */
 document.addEventListener('DOMContentLoaded', ()=>{
+  const formatSelect = document.getElementById('setup-formato');
+  const carouselSetup = document.getElementById('carousel-setup-fields');
+  const imageSetup = document.getElementById('single-image-setup');
+  const formatHelp = document.getElementById('setup-formato-help');
+  const updateSetupFormat = () => {
+    const isImage = formatSelect.value === 'imagen_unica';
+    carouselSetup.hidden = isImage;
+    imageSetup.hidden = !isImage;
+    formatHelp.textContent = isImage
+      ? 'La imagen única se revisa y descarga como un PNG independiente.'
+      : 'El carrusel tiene varias diapositivas y se edita aquí.';
+  };
+  formatSelect.addEventListener('change', updateSetupFormat);
+  updateSetupFormat();
+
   document.getElementById('btn-create').addEventListener('click', ()=>{
     if(state.slides.length>0 && !confirm('Esto reemplazará el carrusel actual. ¿Continuar?')) return;
     const tipo = document.getElementById('setup-tipo').value;

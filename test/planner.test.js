@@ -87,9 +87,12 @@ test('idea aprobada genera copy obligatorio y complemento; falla sin guardar par
   assert.equal(result.additional.tipo, 'guion');
   assert.equal(result.copy.estado, 'revision');
   assert.match(prompts[0], /instagram, facebook/);
-  assert.match(prompts[0], /versión de copy claramente etiquetada/);
+  assert.match(prompts[0], /copies se generarán en llamadas separadas/);
+  assert.doesNotMatch(prompts[1], /instagram, facebook/);
+  assert.match(prompts[1], /Plataforma única de esta salida: instagram/);
+  assert.match(prompts[2], /Plataforma única de esta salida: facebook/);
   assert.equal(db.prepare('SELECT count(*) n FROM generated').get().n, 3);
-  await withKey(() => assert.rejects(() => content.generatePackage(db, { plan_idea_id:id, extra:'carrusel' }, { fetchImpl:fake('No es JSON') }), /JSON de carrusel válido/));
+  await withKey(() => assert.rejects(() => content.generatePackage(db, { plan_idea_id:id, extra:'carrusel' }, { fetchImpl:fake('No es JSON') }), /Carrusel incompleto.*revisión fallida/));
   assert.equal(db.prepare('SELECT count(*) n FROM generated').get().n, 3);
   db.close();
 });

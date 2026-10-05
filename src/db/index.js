@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS approved_info(
   autorizado_publicar INTEGER NOT NULL DEFAULT 0, fuente TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS assets(
   id INTEGER PRIMARY KEY, tipo TEXT NOT NULL, url TEXT NOT NULL, descripcion TEXT, destino TEXT,
+  autorizado_publicar INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS site_pages(
   url TEXT PRIMARY KEY, lang TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL,
@@ -48,8 +49,16 @@ CREATE TABLE IF NOT EXISTS site_syncs(
 -- Todo lo generado nace en 'revision': aprobación humana obligatoria antes de publicar (§8).
 CREATE TABLE IF NOT EXISTS generated(
   id INTEGER PRIMARY KEY, post_id INTEGER REFERENCES posts(id) ON DELETE CASCADE, tipo TEXT NOT NULL,
-  idioma TEXT NOT NULL, contenido TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'revision',
+  idioma TEXT NOT NULL, plataforma TEXT, contenido TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'revision',
+  visual_repair_used INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS failed_visual_reviews(
+  id INTEGER PRIMARY KEY, tipo TEXT NOT NULL, contenido TEXT NOT NULL, errors_json TEXT NOT NULL,
+  estado TEXT NOT NULL DEFAULT 'revision_fallida', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS visual_render_checks(
+  generated_id INTEGER PRIMARY KEY REFERENCES generated(id) ON DELETE CASCADE,
+  content_hash TEXT NOT NULL, ok INTEGER NOT NULL, errors_json TEXT NOT NULL,
+  checked_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS generated_revisions(
   id INTEGER PRIMARY KEY, generated_id INTEGER NOT NULL REFERENCES generated(id) ON DELETE CASCADE,
   version INTEGER NOT NULL, contenido TEXT NOT NULL, segmento TEXT, motivo TEXT NOT NULL,
@@ -130,6 +139,12 @@ function migrate(db) {
   const auditCols = db.prepare('PRAGMA table_info(post_classification_audit)').all().map(c => c.name);
   if (!auditCols.includes('manually_modified_at')) db.exec('ALTER TABLE post_classification_audit ADD COLUMN manually_modified_at TEXT');
   const generatedCols = db.prepare('PRAGMA table_info(generated)').all().map(c => c.name);
+  if(!generatedCols.includes('plataforma')) db.exec('ALTER TABLE generated ADD COLUMN plataforma TEXT');
+  if(!generatedCols.includes('visual_repair_used')) db.exec('ALTER TABLE generated ADD COLUMN visual_repair_used INTEGER NOT NULL DEFAULT 0');
+  // Datos faltantes declarados al generar; viven fuera del texto publicable.
+  if(!generatedCols.includes('pending_json')) db.exec("ALTER TABLE generated ADD COLUMN pending_json TEXT NOT NULL DEFAULT '[]'");
+  const assetCols = db.prepare('PRAGMA table_info(assets)').all().map(c=>c.name);
+  if(!assetCols.includes('autorizado_publicar')) db.exec('ALTER TABLE assets ADD COLUMN autorizado_publicar INTEGER NOT NULL DEFAULT 0');
   if (!generatedCols.includes('plan_idea_id')) db.exec('ALTER TABLE generated ADD COLUMN plan_idea_id INTEGER REFERENCES plan_ideas(id) ON DELETE SET NULL');
   if (!generatedCols.includes('package_id')) db.exec('ALTER TABLE generated ADD COLUMN package_id INTEGER REFERENCES content_packages(id) ON DELETE SET NULL');
   const packageCols = db.prepare('PRAGMA table_info(content_packages)').all().map(c => c.name);

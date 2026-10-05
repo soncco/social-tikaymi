@@ -9,6 +9,8 @@ El generador existente está en:
 - `carruseles-claude-design/shared.jsx`: recurso auxiliar del diseño;
 - `carruseles-claude-design/assets/tikaymi-logo.png`: logo;
 - `src/modules/export.js`: validación/normalización del mismo contrato para salidas de IA.
+- `src/modules/content.js`: validación estricta de nuevas generaciones y recursos autorizados.
+- `public/visual-contract.js`: límites compartidos por campo/layout y comprobación geométrica del render.
 
 No reconstruir los layouts en otro componente sin una decisión explícita. `src/modules/export.js` y el HTML deben mantenerse compatibles con el contrato existente.
 
@@ -110,12 +112,15 @@ El constructor exporta JSON o YAML con `app`, `version`, `tipo`, `exportadoEn` y
 
 `src/modules/export.js` ofrece `carouselExport` para validar salidas de IA, limita el array a un máximo técnico de 7 y normaliza alias/campos antiguos. El prompt de IA solicita 3–5 diapositivas.
 
+Desde 2026-10-05, `content.js` exige 3–5 en nuevas generaciones, campos internos del layout y cierre con CTA. `visual-contract.js` aplica límites de palabras y caracteres por campo (portada 8/12, interior 10/25 para título/cuerpo) y cantidades por lista. El constructor bloquea PNG/JPEG si detecta texto cortado, desbordamiento, solapamiento con logo/pie/contador o fotografías pendientes/no cargables. No reduce automáticamente la fuente. El flujo abierto desde Lab registra la comprobación ligada al contenido exacto y permite guardar cambios en Lab. Contrato y render comparten una sola reparación automática por pieza, persistida en `generated.visual_repair_used`; después se requiere corrección humana. La importación histórica conserva su normalización; no garantiza que un archivo antiguo pase los nuevos controles de exportación.
+
 ## Limitaciones
 
-- No hay persistencia de proyectos en SQLite.
-- No hay una ruta Express que sirva explícitamente el constructor independiente.
-- El backend no valida todos los campos internos de cada layout; valida principalmente tipo y layout.
-- No hay validación semántica de URLs de imágenes ni comprobación de que sean recursos aprobados dentro del HTML autónomo.
+- El archivo autónomo no guarda proyectos por sí solo; el flujo `?id=` guarda correcciones como revisiones en Lab.
+- Express sirve el HTML existente bajo `/constructor/`; no se reconstruyen sus layouts.
+- Las generaciones y aprobaciones de Lab comprueban campos y fotos/testimonios autorizados. La importación autónoma no consulta la Biblioteca; una descarga local por sí sola no implica aprobación en Lab.
+- No hay verificación automática de veracidad ni del idioma de todo el texto: requiere revisión humana.
+- La carga/exportación depende de fotografías accesibles con CORS y dependencias CDN.
 - El renderer de galería corta la lista a un máximo de 3 fotos.
 - El creador inicial puede generar más diapositivas que la recomendación editorial; el botón permite hasta 20, mientras que la recomendación 3–5 proviene de las reglas/prompt.
 

@@ -24,7 +24,7 @@ Basta con **uno**. Puedes configurar varios y alternar desde la pestaña **IA** 
 1. https://platform.deepseek.com → recarga saldo.
 2. **API keys → Create API key** → `DEEPSEEK_API_KEY=...`
 
-Los modelos por defecto (`claude-sonnet-5`, `gpt-4o`, `deepseek-chat`) se pueden cambiar en la pestaña **IA** o con `ANTHROPIC_MODEL` / `OPENAI_MODEL` / `DEEPSEEK_MODEL`; verifica los nombres vigentes en la documentación de cada proveedor. Después reinicia con `npm start` y prueba en **Generar** (necesitas antes información aprobada). Nota: la calidad del resultado (idioma, formato JSON de carruseles, respeto de las reglas de no inventar datos) puede variar entre proveedores; revisa siempre antes de aprobar.
+Los modelos por defecto (`claude-sonnet-5`, `gpt-4o`, `deepseek-flash`) se pueden cambiar en la pestaña **IA** o con `ANTHROPIC_MODEL` / `OPENAI_MODEL` / `DEEPSEEK_MODEL`; para DeepSeek la documentación actual también lista `deepseek-v4-pro`. Los nombres heredados `deepseek-chat` y `deepseek-reasoner` no deben configurarse en instalaciones nuevas. Después reinicia con `npm start` y prueba en **Generar** (necesitas antes información aprobada). Nota: la calidad del resultado (idioma, formato JSON de carruseles, respeto de las reglas de no inventar datos) puede variar entre proveedores; revisa siempre antes de aprobar.
 
 ## 2. Meta (Instagram + Facebook)
 

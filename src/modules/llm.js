@@ -18,7 +18,7 @@ const PROVIDERS = {
     extract: d => d?.choices?.[0]?.message?.content,
   },
   deepseek: {
-    label: 'DeepSeek', keyEnv: 'DEEPSEEK_API_KEY', modelEnv: 'DEEPSEEK_MODEL', defaultModel: 'deepseek-chat',
+    label: 'DeepSeek', keyEnv: 'DEEPSEEK_API_KEY', modelEnv: 'DEEPSEEK_MODEL', defaultModel: 'deepseek-flash',
     request: (key, model, p, budget) => ({ url: 'https://api.deepseek.com/chat/completions', ...chat(key, model, p, budget) }),
     extract: d => d?.choices?.[0]?.message?.content,
   },
@@ -69,7 +69,9 @@ async function complete(db, partes, fetchImpl, options = {}) {
   const key = process.env[p.keyEnv];
   if (!key) throw err(503, `Falta ${p.keyEnv}: configura la clave en el entorno (.env) para usar ${p.label}, o elige otro proveedor.`);
   const budget = Number(options.maxTokens || process.env.LLM_MAX_TOKENS || DEFAULT_BUDGET);
-  const req = p.request(key, model, partes, Number.isFinite(budget) && budget > 0 ? budget : DEFAULT_BUDGET);
+  const outputBudget = Number.isFinite(budget) && budget > 0 ? budget : DEFAULT_BUDGET;
+  const req = p.request(key, model, partes, outputBudget);
+  if (provider === 'deepseek') req.body.thinking = { type: process.env.DEEPSEEK_THINKING === 'enabled' ? 'enabled' : 'disabled' };
   let res;
   try {
     res = await (fetchImpl || globalThis.fetch)(req.url, { method: 'POST', headers: req.headers, body: JSON.stringify(req.body) });
@@ -84,15 +86,38 @@ async function complete(db, partes, fetchImpl, options = {}) {
       ? `Límite de uso de la API de ${p.label} alcanzado; reintenta más tarde o cambia de proveedor.`
       : `La API de ${p.label} devolvió ${res.status}.`);
   }
-  const data = await res.json();
-  const texto = String(p.extract(data) || '').trim();
+  let data = await res.json();
+  let texto = String(p.extract(data) || '').trim();
+  // Algunos modelos de razonamiento (p. ej. DeepSeek) pueden consumir todo
+  // el presupuesto en reasoning_content y devolver content vacío. Nunca
+  // guardamos ese razonamiento como copy: hacemos una única recuperación con
+  // presupuesto ampliado y una instrucción explícita de salida final.
+  if (!texto && data?.choices?.[0]?.message?.reasoning_content && !options._retriedEmpty) {
+    const retryBudget = Math.min(Math.max(outputBudget * 2, 8000), 12000);
+    const retryPartes = { ...partes, prompt: `${partes.prompt}\n\nRESPUESTA FINAL OBLIGATORIA: omite cualquier razonamiento interno y devuelve únicamente el resultado solicitado. No dejes el campo content vacío.` };
+    const retryReq = p.request(key, model, retryPartes, retryBudget);
+    if (provider === 'deepseek') retryReq.body.thinking = { type: process.env.DEEPSEEK_THINKING === 'enabled' ? 'enabled' : 'disabled' };
+    try {
+      const retryRes = await (fetchImpl || globalThis.fetch)(retryReq.url, { method:'POST', headers:retryReq.headers, body:JSON.stringify(retryReq.body) });
+      if (retryRes.ok) {
+        data = await retryRes.json();
+        texto = String(p.extract(data) || '').trim();
+      }
+    } catch (e) {
+      console.error(`[llm] recuperación de respuesta vacía falló para ${p.label}:`, e.message);
+    }
+    if (texto) return { texto, provider, model, budget:retryBudget, stop_reason:data.stop_reason || data.choices?.[0]?.finish_reason || null, truncated:false, usage:data.usage || null, recovered_empty:true };
+  }
   if (!texto) {
-    console.error(`[llm] respuesta incompleta de ${p.label}:`, JSON.stringify(data).slice(0, 500));
-    throw err(502, `La API de ${p.label} devolvió una respuesta sin texto.`);
+    console.error(`[llm] respuesta incompleta de ${p.label}: modelo=${model}, tiene_reasoning=${!!data?.choices?.[0]?.message?.reasoning_content}`);
+    const detalle = data?.choices?.[0]?.message?.reasoning_content
+      ? ' El modelo devolvió razonamiento sin respuesta final; reinicia el servidor para aplicar el modo de salida configurado.'
+      : '';
+    throw err(502, `La API de ${p.label} devolvió una respuesta sin texto.${detalle}`);
   }
   const stopReason = data.stop_reason || data.choices?.[0]?.finish_reason || null;
   const truncated = stopReason === 'max_tokens' || stopReason === 'length';
-  return { texto, provider, model, budget, stop_reason: stopReason, truncated, usage: data.usage || null };
+  return { texto, provider, model, budget:outputBudget, stop_reason: stopReason, truncated, usage: data.usage || null };
 }
 
 module.exports = { PROVIDERS, active, status, configure, complete };

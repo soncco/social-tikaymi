@@ -97,6 +97,7 @@ No crear una columna de “estado de clasificación”. Se deriva de los campos 
 - `generatePackage()` decide primero el contenido principal y deriva copy/prompts posteriores; los borradores históricos de `generated` se conservan.
 - La selección de contexto se limita a información, páginas y recursos aprobados relacionados con la publicación.
 - Carruseles nuevos se validan con el esquema real del constructor (3–5 diapositivas, layouts/campos válidos); las importaciones antiguas siguen pasando por la compatibilidad de `export.js`.
+- Mejora 2026-10-05: imagen única tiene contrato/exportación independiente; los límites de texto por layout y la revisión geométrica se comparten con el constructor existente. Fotos/testimonios requieren autorización y las piezas visuales un reporte vigente antes de aprobación. Destino de cada copy persistido en `generated.plataforma`. Ver `SINGLE_IMAGE_SPEC.md` para flujo y límites; queda pendiente la prueba visual real en navegador y con proveedor real.
 - Guiones y `prompt_flow` validan 3–5 clips, voz/diálogo por clip y duración estimada. Se permite una sola reparación acotada; no hay reintentos ilimitados.
 - El proveedor registra presupuesto, modelo, motivo de parada, uso y truncamiento en la respuesta de ejecución; no se persisten claves ni datos personales.
 

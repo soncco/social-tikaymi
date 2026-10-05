@@ -44,15 +44,28 @@ function recordLeadTransition(db, id, estado) {
   })();
 }
 
-async function regenerate(db, id, { segmento = 'pieza', instruccion = 'Corrige la pieza manteniendo el mensaje y CTA; entrega una versión completa lista para revisión.' } = {}, { content, fetchImpl } = {}) {
+async function regenerate(db, id, { segmento = 'pieza', automatic_visual_repair = false, instruccion = 'Corrige la pieza manteniendo el mensaje y CTA; entrega una versión completa lista para revisión.' } = {}, { content, fetchImpl } = {}) {
   const current = getGenerated(db, id);
   if (!content?.generate) throw err(500, 'Generador no disponible');
+  if(automatic_visual_repair===true){
+    if(!['imagen_unica','carrusel'].includes(current.tipo))throw err(400,'La reparación visual automática solo aplica a imagen o carrusel');
+    const result=db.prepare('UPDATE generated SET visual_repair_used=1 WHERE id=? AND visual_repair_used=0').run(id);
+    if(!result.changes)throw err(409,'Ya se usó la corrección automática. Acorta el campo indicado y guarda una corrección humana.');
+  }
+  const pack=current.package_id ? db.prepare('SELECT brief_json FROM content_packages WHERE id=?').get(current.package_id) : null;
   const generated = await content.generate(db, {
     post_id: current.post_id, plan_idea_id: current.plan_idea_id || undefined, tipo: current.tipo, idioma: current.idioma,
-    source_content: current.contenido, strict: current.tipo === 'carrusel' || current.tipo === 'guion' || current.tipo === 'prompt_flow',
+    brief:pack ? JSON.parse(pack.brief_json) : undefined,
+    platform_override:current.plataforma || undefined,
+    source_content: current.contenido, strict: ['imagen_unica','carrusel','guion','prompt_flow'].includes(current.tipo),
     repair_feedback: `Segmento a corregir: ${segmento}\nMotivo: ${instruccion}`
   }, { fetchImpl, save: false, repair: false });
   let replacement = generated.contenido;
+  if(current.tipo==='imagen_unica') {
+    const before=JSON.parse(current.contenido), after=JSON.parse(replacement);
+    if(before.copies) after.copies=before.copies;
+    replacement=JSON.stringify(after,null,2);
+  }
   // Los carruseles tienen un contrato estructurado: si se solicita slide:N,
   // reemplazamos solo esa diapositiva y conservamos las demás versiones.
   const match = String(segmento).match(/^slide:(\d+)$/i);
@@ -83,7 +96,9 @@ async function regenerate(db, id, { segmento = 'pieza', instruccion = 'Corrige l
     const nextStart = before[index + 1] ? current.contenido.indexOf(before[index + 1].text) : current.contenido.length;
     replacement = `${current.contenido.slice(0, start)}${heading}${replacementText}${current.contenido.slice(nextStart)}`;
   }
-  return edit(db, id, { contenido: replacement, segmento, motivo: instruccion });
+  const saved = edit(db, id, { contenido: replacement, segmento, motivo: instruccion });
+  if (Array.isArray(generated.pending) && current.tipo === 'copy') db.prepare('UPDATE generated SET pending_json=? WHERE id=?').run(JSON.stringify(generated.pending), id);
+  return saved;
 }
 
 module.exports = { versions, feedback, edit, recordLeadTransition, regenerate };

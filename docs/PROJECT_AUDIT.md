@@ -1,5 +1,7 @@
 # Auditoría técnica del repositorio
 
+Nota de vigencia (2026-10-05): este informe conserva el snapshot de su fecha y sus anexos. Las mejoras posteriores de imagen única, rutas del constructor, límites por layout, recursos autorizados y revisión del render se documentan en `SINGLE_IMAGE_SPEC.md`, `CAROUSEL_GENERATOR_SPEC.md` y `PROGRESS.md`; las afirmaciones históricas sobre ausencia de esos controles ya no describen el código actual.
+
 Fecha de revisión: 2026-10-03  
 Alcance: inspección estática de código, esquema SQLite, documentación, interfaz, constructor de carruseles, variables de entorno y pruebas. No se modificó ningún archivo de código.
 

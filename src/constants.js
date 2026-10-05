@@ -13,7 +13,7 @@ module.exports = {
   // Fase 2 (secciones 8, 9, 10)
   INFO_TIPOS: ['servicio', 'precio', 'testimonio', 'politica', 'otro'],
   ASSET_TIPOS: ['foto', 'video'],
-  CONTENIDO_TIPOS: ['copy', 'guion', 'prompt_flow', 'carrusel', 'whatsapp', 'ab'],
+  CONTENIDO_TIPOS: ['copy', 'guion', 'prompt_flow', 'carrusel', 'imagen_unica', 'whatsapp', 'ab'],
   // La IA nunca marca 'publicado': solo una persona aprueba o rechaza.
   GENERADO_ESTADOS: ['revision', 'aprobado', 'rechazado'],
 };

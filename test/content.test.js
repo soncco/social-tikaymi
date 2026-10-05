@@ -82,7 +82,7 @@ test('el prompt solo lleva información autorizada y prohíbe inventar', async (
   const d = db();
   aprobada(d, { titulo: 'Precio Humantay', texto: 'USD 60 por persona', tipo: 'precio', autorizado_publicar: 1 });
   aprobada(d, { titulo: 'Borrador interno', texto: 'DESCUENTO SECRETO NO AUTORIZADO', tipo: 'otro', autorizado_publicar: 0 });
-  d.prepare("INSERT INTO assets(tipo,url,descripcion,destino) VALUES('foto','https://x/1.jpg','Laguna al amanecer','Humantay')").run();
+  d.prepare("INSERT INTO assets(tipo,url,descripcion,destino,autorizado_publicar) VALUES('foto','https://x/1.jpg','Laguna al amanecer','Humantay',1)").run();
   const cap = {};
   await conClave(() => content.generate(d, { post_id: 1, tipo: 'copy', idioma: 'es' }, { fetchImpl: fakeFetch('Copy', cap) }));
 
@@ -113,9 +113,9 @@ test('carrusel: valida 3-5 diapositivas con los layouts del constructor', async 
   const d = db();
   aprobada(d);
   const json = JSON.stringify({ tipo: 'informativo', slides: [
-    { layout: 'portada', data: { titulo: 'Humantay' } },
-    { layout: 'pasos', data: { titulo: 'Cómo llegar' } },
-    { layout: 'cierre', data: { titulo: 'Escríbenos' } },
+    { layout: 'portada', data: { h1:'Humantay',eyebrow:'Planifica tu visita',note:'Foto pendiente' } },
+    { layout: 'pasos', data: { h2:'Cómo llegar',eyebrow:'Paso a paso',steps:[{title:'Consulta',text:'Consulta la ruta aprobada.'}] } },
+    { layout: 'cierre', data: { h2:'Escríbenos',eyebrow:'Tu siguiente paso',body:'Comparte tus fechas.',ctaText:'Escríbenos' } },
   ] });
   const out = await conClave(() => content.generate(d, { post_id: 1, tipo: 'carrusel', idioma: 'es' }, { fetchImpl: fakeFetch('```json\n' + json + '\n```') }));
   const exportado = JSON.parse(out.contenido);
@@ -128,7 +128,8 @@ test('prompt de carrusel exige el esquema real de cada layout', async () => {
   const d = db();
   aprobada(d);
   const cap = {};
-  await conClave(() => content.generate(d, { post_id:1, tipo:'carrusel', idioma:'es' }, { fetchImpl: fakeFetch('{"tipo":"informativo","slides":[{"layout":"portada","data":{"h1":"x"}},{"layout":"cierre","data":{"h2":"y"}}]}', cap) }));
+  const fixture={tipo:'informativo',slides:[{layout:'portada',data:{h1:'Humantay',eyebrow:'Tu viaje',note:'Foto pendiente'}},{layout:'pasos',data:{h2:'Planifica',eyebrow:'Paso a paso',steps:[{title:'Consulta',text:'Consulta tus fechas.'}]}},{layout:'cierre',data:{h2:'Escríbenos',eyebrow:'Tu viaje',body:'Comparte tus fechas.',ctaText:'Escríbenos'}}]};
+  await conClave(() => content.generate(d, { post_id:1, tipo:'carrusel', idioma:'es' }, { fetchImpl: fakeFetch(JSON.stringify(fixture), cap) }));
   assert.match(cap.body.messages[0].content, /route:\[\{d,t\}\]/);
   assert.match(cap.body.messages[0].content, /No uses campos genéricos titulo\/texto/);
 });
@@ -239,4 +240,44 @@ test('el resumen analítico del prompt respeta filtros entregados por el plan', 
   const cap = {};
   await conClave(() => content.generate(d, { post_id:1, tipo:'copy', idioma:'es', analysis_filters:{ plataforma:'instagram', idioma:'es' } }, { fetchImpl: fakeFetch('copy', cap), save:false }));
   assert.match(cap.body.messages[0].content, /## Resumen del análisis de datos/);
+});
+
+test('los hashtags sobreviven a la limpieza de Markdown; los encabezados no', () => {
+  const out = content.sanitizeCopy('## Título\n\nTexto útil 🧭\n\n#Cusco #MachuPicchu #PeruTravel');
+  assert.match(out, /^#Cusco #MachuPicchu #PeruTravel$/m);
+  assert.doesNotMatch(out, /##/);
+});
+
+test('los datos faltantes salen del copy publicable y quedan como pendientes', async () => {
+  const d = db();
+  aprobada(d);
+  const respuesta = 'Planifica Humantay con calma.\n\n[FALTA DATO: hora de retorno]\n\nEscríbenos por WhatsApp.\n\n#Cusco #Humantay\n\n---PENDIENTES---\n[FALTA DATO: precio por persona]';
+  const out = await conClave(() => content.generate(d, { post_id:1, tipo:'copy', idioma:'es' }, { fetchImpl: fakeFetch(respuesta) }));
+  assert.doesNotMatch(out.contenido, /FALTA DATO|PENDIENTES/);
+  assert.match(out.contenido, /#Cusco #Humantay/);
+  assert.ok(out.pending.includes('[FALTA DATO: hora de retorno]'));
+  assert.ok(out.pending.includes('[FALTA DATO: precio por persona]'));
+  assert.ok(out.pending.some(x => /WhatsApp/.test(x)), 'sin número configurado se pide configurarlo, sin inventarlo');
+  assert.deepEqual(JSON.parse(d.prepare('SELECT pending_json FROM generated WHERE id=?').get(out.id).pending_json), out.pending);
+});
+
+test('con WhatsApp configurado el copy incluye el contacto real antes de los hashtags', async () => {
+  const d = db();
+  aprobada(d);
+  const strategy = require('../src/modules/editorial-strategy');
+  const { rules, ...saved } = strategy.get(d);
+  strategy.update(d, { ...saved, whatsapp_number:'+51 984 000 111' });
+  const cap = {};
+  const out = await conClave(() => content.generate(d, { post_id:1, tipo:'copy', idioma:'es' }, { fetchImpl: fakeFetch('Planifica Humantay.\n\n#Cusco #Humantay', cap) }));
+  assert.match(cap.body.system, /\+51 984 000 111/);
+  assert.match(out.contenido, /wa\.me\/51984000111\n\n#Cusco #Humantay$/);
+  assert.ok(!out.pending.some(x => /WhatsApp/.test(x)));
+  assert.throws(() => strategy.update(d, { ...saved, whatsapp_number:'llámanos' }), /WhatsApp/);
+});
+
+test('un copy con un marcador dentro del texto no se puede aprobar', async () => {
+  const d = db();
+  aprobada(d);
+  const out = await conClave(() => content.generate(d, { post_id:1, tipo:'copy', idioma:'es' }, { fetchImpl: fakeFetch('Sale a las [FALTA DATO: hora] desde Cusco.') }));
+  assert.throws(() => content.setEstado(d, out.id, 'aprobado'), e => e.status === 422 && /Editar texto/.test(e.message));
 });

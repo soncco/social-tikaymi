@@ -6,18 +6,25 @@
 - El contenido debe ayudar a decidir o preparar un viaje: rutas, días, entradas, trenes, altura, equipaje, traslados o coordinación.
 - Evitar contenido enciclopédico independiente que no conduzca a una decisión o conversación.
 - Presentar a Tikaymi como una agencia boutique y a Deicy como figura humana de coordinación cuando sea pertinente, sin inventar biografía, autoridad o testimonio.
-- Usar solo información aprobada de `approved_info`, páginas web aprobadas y recursos visuales disponibles.
+- Usar solo información aprobada de `approved_info`, páginas web aprobadas y recursos visuales autorizados explícitamente en Biblioteca.
+
+## Formatos e imagen única
+
+El formato elegido (imagen única, carrusel, reel/video o solo copy) es independiente del propósito. No convertir imagen única en una diapositiva de carrusel. Su contrato, plantillas y controles se documentan en `SINGLE_IMAGE_SPEC.md`.
+
+El texto visual es breve; la explicación va en el copy, generado por separado para cada plataforma. Las recomendaciones de formato son hipótesis o señales exploratorias con evidencia y limitaciones, no decisiones automáticas ni ganadores por likes.
 
 ## Carruseles
 
 - Usar 3 a 5 diapositivas por defecto.
-- No generar automáticamente siete diapositivas. El constructor permite un tope técnico de siete en la validación del backend, pero el prompt de IA solicita 3–5.
+- No generar automáticamente siete diapositivas. Las nuevas generaciones exigen 3–5; `export.js` conserva el tope de siete para compatibilidad histórica y el editor manual permite más.
 - Cada diapositiva debe aportar una idea nueva; no dividir artificialmente una misma frase.
-- El cierre, cuando se use, debe ser la última diapositiva.
+- En nuevas generaciones, incluir cierre con CTA como última diapositiva; los archivos históricos pueden tener otra estructura.
 - Elegir `producto` para vender o explicar un tour y `informativo` para resolver una pregunta general.
 - Usar los campos reales de cada layout; no enviar únicamente `titulo` y `texto` como contrato principal.
 - En un itinerario, separar cada día o etapa en `route`; en una ficha, separar datos en `meta`; en “bueno saberlo”, usar `notes`.
 - Las etiquetas, títulos, notas, CTA y contacto deben estar en el idioma de la pieza.
+- Respetar los límites por layout de `visual-contract.js` y resolver cortes/solapamientos antes de exportar o aprobar. No reducir indefinidamente la tipografía para forzar texto.
 
 ## Reels y videos cortos
 
@@ -45,4 +52,5 @@
 
 - Todo contenido generado nace en `revision`.
 - Una persona debe revisar el texto, las fuentes, el idioma, los recursos y el CTA antes de marcarlo aprobado.
+- Las piezas visuales requieren una comprobación de render vigente, sin cortes ni marcadores fotográficos. Cambiar el contenido exige nueva revisión.
 - La aplicación no publica automáticamente; programar solo crea un recordatorio manual o un archivo iCalendar.

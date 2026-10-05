@@ -23,14 +23,22 @@ La pantalla **Inicio** muestra el estado de preparación y una única “siguien
 1. **Configuración → Objetivo del período:** define el resultado comercial y una meta.
 2. **Configuración → Fuentes de datos:** sincroniza Meta o importa un CSV.
 3. **Rendimiento:** revisa recomendaciones, comparaciones y los límites de los datos.
-4. **Configuración → Estrategia editorial:** confirma producto prioritario, URL, audiencias y persona de contacto.
+4. **Configuración → Estrategia editorial:** confirma producto prioritario, URL, audiencias, persona de contacto y el WhatsApp con código de país. Sin el número, los copies no muestran forma de contacto.
 5. **Contenido → Planificar contenido:** elige semana o mes, revisa la razón editorial, fuente web, señales y límites de cada idea, y aprueba las que quieras trabajar.
 6. **Contenido → Publicaciones:** clasifica las piezas importadas que aún necesiten contexto.
 7. **Configuración → Sitio web:** revisa la copia local de tours, blog y otras páginas; aprueba únicamente las que quieras usar como fuente de redacción.
 8. **Consultas → Enlaces y rastreo:** crea códigos o enlaces diferentes para reconocer el origen de cada consulta.
 9. **Consultas → Consultas y estados:** registra contactos y actualízalos hasta cotizado, reservado o perdido.
 10. **Configuración → Biblioteca aprobada:** carga servicios, precios, testimonios, fotos y videos reales que no estén cubiertos por páginas aprobadas.
-11. **Contenido → Crear con IA:** genera el copy y, si quieres, un guion, prompts de video o un carrusel. No necesitas una publicación previa.
+11. **Contenido → Crear con IA:** elige el formato: imagen única, carrusel, reel/video o solo copy. No necesitas una publicación previa. El propósito (producto, informativo o confianza) es independiente del formato.
+
+### Revisar imágenes y carruseles
+
+Autoriza las fotografías en **Configuración → Biblioteca**. En **Contenido → Crear con IA**, elige el formato y genera el borrador. En **Borradores generados**, el botón **Revisar y descargar PNG** aparece debajo de cada pieza de imagen única; no hace falta aprobarla ni desplegar la tarjeta para revisarla. Dentro del editor carga/revisa el borrador y pulsa **Descargar PNG individual**. Para carruseles, usa **Revisar y exportar carrusel**. Cada plataforma tiene un copy separado.
+
+En `carruseles-claude-design/Tikaymi - Constructor de Carruseles.html`, el primer selector **Formato** permite elegir **Carrusel de varias diapositivas** o **Imagen única · un PNG**. La segunda opción muestra **Abrir editor de imagen única**; es un editor independiente, no un layout ni una diapositiva del carrusel. El enlace del encabezado también lleva a ese editor.
+
+La imagen única exporta un PNG individual y permite escoger una foto de la Biblioteca o pegar su URL. La URL debe estar registrada y autorizada en **Configuración → Biblioteca** y permitir CORS; pegar una dirección no la autoriza automáticamente. Usa las plantillas del constructor de carruseles: producto como portada con foto a sangre, informativo como portada editorial y testimonio como cita. El carrusel usa el constructor existente y permite **Guardar cambios en Lab y revisar**. Ambos comprueban texto, cortes y zonas del pie; las fotos pendientes y los errores impiden la descarga final y la aprobación en Lab. Si el texto no cabe se intenta acortarlo una vez y queda pendiente si todavía falla. No reduzcas la fuente para forzarlo. Tras editar, vuelve a revisar la composición. La aprobación humana permanece obligatoria. La verificación de un PNG real en navegador queda pendiente en esta entrega; ver `SINGLE_IMAGE_SPEC.md`.
 
 ## Las cinco áreas
 
@@ -52,7 +60,7 @@ Las métricas de plataformas distintas nunca se suman. Los likes no deciden qué
 - **Planificar contenido:** prepara 3 ideas semanales u 8 mensuales. La vista previa funciona sin clave de IA: combina estrategia declarada, copia local de la web y métricas relacionadas cuando existen. «Analizar y proponer con IA» requiere el proveedor configurado. Cada idea muestra idioma, motivo editorial, fuente, evidencia, confianza y límites. Puedes editar título, fecha, audiencia, objetivo de marketing y CTA; luego aprobar o descartar. Aprobar una idea no aprueba automáticamente el texto que se genere.
 
 Si la IA no devuelve JSON válido o falta un campo, el plan no se guarda. El mensaje identifica la posición de la idea y el campo o razón detectada. El proceso de Node escribe además un diagnóstico breve en la consola del servidor; no guarda claves, prompts completos ni la respuesta completa del proveedor. Es un registro de ejecución, no un historial persistente: al reiniciar el proceso no se pueden recuperar llamadas anteriores.
-- Si hay una copia local del sitio, el plan busca temas de tours y artículos prácticos allí, marca la URL de origen y evita coincidencias fuertes con títulos ya publicados o planeados. Es un filtro de novedad por títulos, no una garantía de que nunca se repita un enfoque semántico.
+- Si hay una copia local del sitio, el plan busca temas de tours y artículos prácticos allí, marca la URL de origen y evita coincidencias fuertes con títulos ya publicados o planeados. Las comparaciones de Humantay, Palcoyo y Vinicunca se contrastan como pares de destinos para no volver a proponer el mismo par; la IA también recibe los títulos recientes y debe conservar el tema/fuente de cada idea. Esto reduce repeticiones, pero no garantiza novedad semántica en cualquier tema.
 - **Publicaciones:** lista de piezas y clasificación masiva. Una pieza importada ya se considera `publicado`; puede estar publicada y a la vez pendiente de clasificación.
 - En **Clasificación rápida**, marca las publicaciones en la tabla y completa únicamente los campos comunes. Guardar una parte no elimina la etiqueta **Pendiente**: la tabla y el aviso posterior muestran los campos que aún faltan. Por defecto se respetan los valores existentes; activa **Sobrescribir valores ya clasificados** solo para corregirlos deliberadamente.
 - **Crear con IA:** puedes partir de una idea aprobada, describir una pieza nueva o usar una publicación existente como referencia opcional. La idea aprobada conserva el idioma de su plan. El copy se genera siempre; guion, prompts o carrusel se pueden añadir. Cada resultado queda en revisión humana. La generación requiere información autorizada en Biblioteca o una página web aprobada y pertinente.
@@ -73,7 +81,9 @@ Sin consultas atribuidas, la aplicación declara explícitamente que no puede me
 
 Agrupa objetivo del período, sincronización/importación, copia local del sitio, biblioteca aprobada y proveedor de IA. Las claves de APIs solo viven en `.env`.
 
-En **Estrategia editorial** puedes ajustar el producto prioritario, su URL, las audiencias y el contacto. Estos ajustes afectan planes nuevos y prompts nuevos, no reescriben planes guardados. La prioridad comercial no demuestra que una publicación haya convertido; eso requiere consultas atribuidas. Las reglas de voz, decisión de viaje y no inventar testimonios se aplican automáticamente.
+**Datos que faltan.** Si la IA necesitó un dato que no está aprobado (horarios, temporadas, condiciones…), no lo escribe en el copy: aparece en el recuadro **Datos que faltan** de la tarjeta. El copy se puede publicar sin ellos. Para incluirlos, regístralos en **Configuración → Biblioteca** o aprueba la página web que los contiene y usa **Regenerar parte**. Si un borrador antiguo aún muestra `[FALTA DATO: …]` dentro del texto, usa **Editar texto** para escribir el dato verificado o quitar la frase; mientras quede un marcador no se puede aprobar. En la imagen única, los datos que faltan se ven en el editor y se resuelven en **Ajustar textos y resolver pendientes**.
+
+En **Estrategia editorial** puedes ajustar el producto prioritario, su URL, las audiencias y el contacto (nombre y WhatsApp). El copy cierra con el WhatsApp configurado y una línea de hashtags por plataforma. Estos ajustes afectan planes nuevos y prompts nuevos, no reescriben planes guardados. La prioridad comercial no demuestra que una publicación haya convertido; eso requiere consultas atribuidas. Las reglas de voz, decisión de viaje y no inventar testimonios se aplican automáticamente.
 
 En **Sitio web**, pulsa **Actualizar desde Tikaymi.com** cuando cambies la web. Se leen el sitemap y las páginas indicadas, se guardan localmente y se muestran el resultado y la fecha. El planificador consulta esa copia, no la web en cada planificación. Español e inglés se guardan por separado. Una página nueva queda pendiente; si una página aprobada cambia, se retira su aprobación hasta que vuelvas a revisarla. Si una URL desaparece del sitemap, queda archivada y ya no se usa, sin borrar el registro. Las páginas con fallo de descarga conservan su copia anterior.
 

@@ -6,6 +6,8 @@ const DEFAULT = Object.freeze({
   secondary_audience: 'Viajeros hispanohablantes que comparan tours de un día o rutas cortas desde Cusco',
   contact_name: 'Deicy Ayala',
 });
+// Datos de contacto declarados por Tikaymi. Opcionales: si faltan, el copy no inventa un número.
+const OPTIONAL = Object.freeze({ whatsapp_number:'' });
 
 const RULES = Object.freeze({
   position: 'Agencia boutique de viajes personalizados por todo el Perú. Deicy diseña la ruta y coordina la logística antes y durante el viaje.',
@@ -22,7 +24,7 @@ function get(db) {
   const raw = db.prepare("SELECT value FROM settings WHERE key='editorial_strategy'").get()?.value;
   let saved = {};
   if (raw) try { saved = JSON.parse(raw); } catch { /* mantener valores seguros */ }
-  return { ...DEFAULT, ...saved, rules:RULES };
+  return { ...DEFAULT, ...OPTIONAL, ...saved, rules:RULES };
 }
 
 function update(db, body = {}) {
@@ -33,6 +35,11 @@ function update(db, body = {}) {
     if (!value || value.length > 350) throw err(`Completa ${key} (máximo 350 caracteres)`);
     next[key] = value;
   }
+  const whatsapp = String(body.whatsapp_number ?? '').trim();
+  const digits = whatsapp.replace(/\D/g, '');
+  if (whatsapp && (!/^\+?[\d\s().-]+$/.test(whatsapp) || digits.length < 8 || digits.length > 15))
+    throw err('El WhatsApp debe incluir código de país y solo números, por ejemplo +51 984 000 000');
+  next.whatsapp_number = whatsapp;
   let url;
   try { url = new URL(next.priority_tour_url); } catch { throw err('La URL del producto prioritario no es válida'); }
   if (url.protocol !== 'https:' || url.hostname !== 'tikaymi.com' || !/^\/(?:en\/)?tour\//.test(url.pathname))
@@ -42,7 +49,18 @@ function update(db, body = {}) {
   return get(db);
 }
 
+// Línea de contacto verificable: el número sale de la configuración, nunca de la IA.
+function contact(strategy, lang) {
+  const digits = String(strategy.whatsapp_number || '').replace(/\D/g, '');
+  if (!digits) return null;
+  const shown = String(strategy.whatsapp_number).trim();
+  return { digits, url:`https://wa.me/${digits}`, line: lang === 'en'
+    ? `📲 WhatsApp ${strategy.contact_name}: ${shown} · wa.me/${digits}`
+    : `📲 WhatsApp de ${strategy.contact_name}: ${shown} · wa.me/${digits}` };
+}
+
 function guidance(strategy, lang) {
+  const whatsapp = contact(strategy, lang);
   const primary = lang === 'en';
   return [
     `Posicionamiento: ${RULES.position}`,
@@ -54,8 +72,9 @@ function guidance(strategy, lang) {
     `Intención: ${RULES.intent}`,
     `Prohibiciones: ${RULES.avoid} No usar cheap, barato, low cost, ofertas, hidden gem, bucket list, unforgettable experience, mágico/místico ni the best sin respaldo.`,
     `CTA: invitar a escribir por WhatsApp a ${strategy.contact_name} con destino, fechas y cantidad de viajeros; adaptar el mensaje al tema.`,
+    whatsapp ? `Contacto verificado para el cierre: WhatsApp ${strategy.whatsapp_number} (${whatsapp.url}). Cópialo exactamente.` : 'No hay número de WhatsApp configurado: no escribas ningún número ni enlace inventado.',
     `Prueba social: ${RULES.reviews}`,
   ].join('\n');
 }
 
-module.exports = { DEFAULT, RULES, get, update, guidance };
+module.exports = { DEFAULT, RULES, get, update, guidance, contact };

@@ -19,6 +19,8 @@ function createApp(db, auth) {
     res.status(err.status || 500).json({ error: err.message });
   });
   app.use(express.static(path.join(__dirname, '../public')));
+  app.use('/public', express.static(path.join(__dirname, '../public')));
+  app.use('/constructor', express.static(path.join(__dirname, '../carruseles-claude-design')));
   return app;
 }
 
