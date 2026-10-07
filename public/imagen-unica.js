@@ -1,6 +1,6 @@
 /* Renderer independiente: una publicación, un lienzo y un único PNG. */
 let current, generatedId, originalContent, renderSequence=0, visualRepairUsed=false;
-let approvedContext={resources:[],testimonials:[],attributions:[]}, approvedPhotos=[];
+let approvedContext={resources:[],allowCloudinary:true,revoked:[],testimonials:[],attributions:[]}, approvedPhotos=[];
 const node = document.getElementById('canvas'), statusNode = document.getElementById('status');
 const preview = document.querySelector('.preview'), previewFrame = document.getElementById('preview-frame');
 function fitPreview(){
@@ -11,15 +11,16 @@ function fitPreview(){
 }
 new ResizeObserver(fitPreview).observe(preview);fitPreview();
 function textElement(tag, text) { const el=document.createElement(tag); el.textContent=text || ''; return el; }
-const LABELS={es:{producto:'Viajes a medida',informativo:'Guía práctica',testimonio:'Experiencia viajera',photo:'Fotografía necesaria',photoNote:'Elige una foto autorizada de la biblioteca'},
-  en:{producto:'Tailor-made travel',informativo:'Practical guide',testimonio:'Traveler experience',photo:'Photo needed',photoNote:'Choose an approved photo from the library'}};
-const RIDGE='M2 24 L44 8 L62 16 L86 2 L120 20 L148 12 L198 24';
+const LABELS={es:{producto:'Viajes a medida',informativo:'Guía práctica',testimonio:'Experiencia viajera',photo:'Fotografía necesaria',photoNote:'Pega una foto de Cloudinary'},
+  en:{producto:'Tailor-made travel',informativo:'Practical guide',testimonio:'Traveler experience',photo:'Photo needed',photoNote:'Paste a Cloudinary photo'}};
+// Silueta de la montaña del logo de Tikaymi (pico menor, pico mayor y su pliegue).
+const RIDGE=['M3 61 L19 38 L35 54 L42 44 L47 47 L53 41 L60 42 L91 3 L130 32 L134 31 L157 61','M60 42 L77 52 L92 5'];
 function div(className,...children){const el=document.createElement('div');el.className=className;el.append(...children);return el;}
 function photoBlock(url,lang,className=''){
   if(url){const img=div('t-photo-img');img.style.backgroundImage=`url("${url.replace(/"/g,'%22')}")`;img.setAttribute('role','img');return div(('t-photo '+className).trim(),img);}
   const note=div('t-ph-note');note.append(textElement('b',LABELS[lang].photo),document.createTextNode(LABELS[lang].photoNote));return div(('t-ph '+className).trim(),note);
 }
-function ridge(margin){const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('class','t-ridge');svg.setAttribute('viewBox','0 0 200 26');svg.style.marginTop=margin+'px';const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',RIDGE);svg.appendChild(path);return svg;}
+function ridge(margin){const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('class','t-ridge');svg.setAttribute('viewBox','0 0 160 64');svg.style.marginTop=margin+'px';for(const d of RIDGE){const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',d);svg.appendChild(path);}return svg;}
 function footBlock(onPhoto){
   const logo=document.createElement('img');logo.className='t-logo'+(onPhoto?' on-photo':'');logo.src='tikaymi-logo.png';logo.alt='Tikaymi Travel';
   const site=textElement('span','tikaymi.com');site.className='t-site'+(onPhoto?' on-dark':'');
@@ -65,7 +66,8 @@ async function loadApprovals(){
   const [assets,info]=await Promise.all(responses.map(res=>res.json()));
   approvedPhotos=assets.filter(x=>x.tipo==='foto' && x.autorizado_publicar);
   const testimonials=info.filter(x=>x.tipo==='testimonio' && x.autorizado_publicar);
-  approvedContext={resources:approvedPhotos.map(x=>x.url),testimonials:testimonials.map(x=>x.texto),attributions:testimonials.map(x=>x.titulo)};
+  const revoked=assets.filter(x=>x.tipo==='foto' && !x.autorizado_publicar).map(x=>x.url);
+  approvedContext={resources:approvedPhotos.map(x=>x.url),allowCloudinary:true,revoked,testimonials:testimonials.map(x=>x.texto),attributions:testimonials.map(x=>x.titulo)};
   const select=document.getElementById('photo');select.replaceChildren(new Option('— Fotografía pendiente —',''));
   approvedPhotos.forEach(x=>select.add(new Option(x.descripcion || x.destino || x.url,x.url)));
   select.value=current?.resource?.url || '';
@@ -138,7 +140,8 @@ document.getElementById('save-photo').onclick=async()=>{
     if(!current)throw new Error('Abre primero una pieza');
     const url=document.getElementById('photo-url').value.trim() || document.getElementById('photo').value;
     await loadApprovals();
-    if(url && !approvedContext.resources.includes(url))throw new Error('La fotografía ya no está autorizada');
+    if(url && approvedContext.revoked.includes(url))throw new Error('Esa fotografía fue retirada en Biblioteca');
+    if(url && !TikaymiVisual.photoAllowed(url,approvedContext))throw new Error('Pega una URL de '+TikaymiVisual.CLOUDINARY_PHOTO_BASE+'… o elige una foto de Biblioteca');
     const next=structuredClone(current);next.resource={url,pending:url?'':'Fotografía aprobada pendiente'};
     next.visual=Object.fromEntries(['headline','support','visualCta'].map(field=>[field,document.getElementById(field).value.trim()]));
     next.alt=document.getElementById('alt').value.trim();

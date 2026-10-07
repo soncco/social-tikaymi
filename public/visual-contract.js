@@ -12,6 +12,17 @@
     charactersPerWord: 16,
   };
   const words = x => String(x || '').trim().split(/\s+/).filter(Boolean).length;
+  // Fotos subidas a la cuenta Cloudinary de Tikaymi. Solo /image/upload/: /image/fetch/ reenviaría cualquier URL externa.
+  const CLOUDINARY_PHOTO_BASE = 'https://res.cloudinary.com/tikaymi/image/upload/';
+  function isCloudinaryPhoto(url) {
+    try { const u = new URL(String(url || '')); return u.protocol === 'https:' && u.hostname === 'res.cloudinary.com' && u.pathname.startsWith('/tikaymi/image/upload/') && u.pathname.length > 22; }
+    catch { return false; }
+  }
+  // Una persona puede pegar una foto de Cloudinary sin registrarla antes, salvo que se haya retirado en Biblioteca.
+  function photoAllowed(url, options = {}) {
+    if (options.resources?.includes(url)) return true;
+    return !!options.allowCloudinary && isCloudinaryPhoto(url) && !options.revoked?.includes(url);
+  }
   function validateSingle(x, options = {}) {
     const errors = [], pending = Array.isArray(x?.pending) ? x.pending.filter(v=>typeof v==='string' && v.trim()) : [];
     if (x?.format !== 'imagen_unica' || x?.version !== 1) errors.push('format/version: requiere imagen_unica versión 1');
@@ -33,7 +44,7 @@
     if(x?.copies!=null && (!Array.isArray(x.copies) || x.copies.some(copy=>!['instagram','facebook','tiktok','youtube_shorts'].includes(copy?.plataforma) || copy?.idioma!==x.idioma || !nonEmpty(copy?.text))))errors.push('copies: requiere textos por plataforma, en el idioma de la pieza');
     if (typeof x?.resource?.url !== 'string') errors.push('resource.url: debe ser texto (vacío si pendiente)');
     if (!x?.resource?.url) pending.push('Fotografía aprobada pendiente');
-    if (x?.resource?.url && options.resources && !options.resources.includes(x.resource.url)) errors.push('resource.url: recurso no autorizado');
+    if (x?.resource?.url && options.resources && !photoAllowed(x.resource.url, options)) errors.push('resource.url: recurso no autorizado');
     if (x?.tipo === 'testimonio' && (!x?.testimonial?.quote || !options.testimonials?.includes(x.testimonial.quote) || x.visual?.support !== x.testimonial.quote)) errors.push('testimonial.quote: requiere testimonio literal aprobado idéntico al apoyo visual');
     if (x?.testimonial?.by && options.attributions && !options.attributions.includes(x.testimonial.by)) errors.push('testimonial.by: atribución no autorizada');
     return { ok:!errors.length, errors, pending:[...new Set(pending)], ready:!errors.length && !pending.length };
@@ -89,5 +100,5 @@
     const [key,x]=candidates[0];
     return `Sugerencia exploratoria: ${labels[key]}. Registró ${x.negocio.consultas} consultas atribuidas en ${x.n} publicaciones en ${x.plataformas[0]}, la mayor razón consultas/publicación entre formatos con muestra suficiente. No prueba causalidad ni tasa de conversión; revisa audiencia, tema y período. Tu selección no cambia.`;
   }
-  return { limits, words, validateSingle, validateCarousel, validateRender, formatRecommendation };
+  return { limits, words, CLOUDINARY_PHOTO_BASE, isCloudinaryPhoto, photoAllowed, validateSingle, validateCarousel, validateRender, formatRecommendation };
 });

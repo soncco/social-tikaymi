@@ -158,3 +158,38 @@ test('reparar imagen única conserva la plataforma de destino y no modifica el b
     assert.equal(result.visual_repair_used,1);assert.deepEqual(source,before);
   }finally{if(old===undefined)delete process.env.ANTHROPIC_API_KEY;else process.env.ANTHROPIC_API_KEY=old;db.close();}
 });
+test('foto de Cloudinary de Tikaymi pegada por una persona se registra y permite aprobar; ajenas o retiradas no',()=>{
+  assert.equal(visual.isCloudinaryPhoto('https://res.cloudinary.com/tikaymi/image/upload/c_fill,ar_4:5/v1/tours/machu.jpg'),true);
+  for(const url of ['https://res.cloudinary.com/otra/image/upload/x.jpg','https://res.cloudinary.com/tikaymi/image/fetch/https://evil.example/x.jpg','http://res.cloudinary.com/tikaymi/image/upload/x.jpg','https://res.cloudinary.com/tikaymi/image/upload/','no es url'])
+    assert.equal(visual.isCloudinaryPhoto(url),false,url);
+  const db=setup(),url='https://res.cloudinary.com/tikaymi/image/upload/v1/tours/machu.jpg';
+  try{
+    // La IA no puede usar una URL de Cloudinary no registrada: la validación de generación no admite pegadas.
+    assert.match(visual.validateSingle(image('producto',url),{resources:['https://fixture.invalid/foto.jpg']}).errors.join(),/no autorizado/);
+    assert.equal(visual.validateSingle(image('producto',url),{resources:[],allowCloudinary:true,revoked:[]}).ok,true);
+    const id=db.prepare("INSERT INTO generated(tipo,idioma,contenido) VALUES('imagen_unica','es',?)").run(JSON.stringify(image())).lastInsertRowid;
+    const raw=JSON.stringify(image('producto',url));
+    assert.deepEqual(revisions.edit(db,id,{contenido:raw,segmento:'pieza',motivo:'Foto desde Cloudinary'}).fotos_registradas,[url]);
+    assert.deepEqual(revisions.edit(db,id,{contenido:raw,segmento:'pieza',motivo:'Repetir'}).fotos_registradas,[]);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM assets WHERE url=? AND autorizado_publicar=1').get(url).n,1);
+    review.record(db,id,{contenido:raw,errors:[]});assert.equal(content.setEstado(db,id,'aprobado').estado,'aprobado');
+    // Retirarla en Biblioteca bloquea la aprobación y una nueva edición no la reautoriza.
+    db.prepare('UPDATE assets SET autorizado_publicar=0 WHERE url=?').run(url);
+    revisions.edit(db,id,{contenido:raw,segmento:'pieza',motivo:'Otra vez'});
+    review.record(db,id,{contenido:raw,errors:[]});assert.throws(()=>content.setEstado(db,id,'aprobado'),/no autorizado/);
+    assert.equal(visual.validateSingle(image('producto',url),{resources:[],allowCloudinary:true,revoked:[url]}).ok,false);
+    // Ajena a la cuenta: no se registra.
+    const other=JSON.stringify(image('producto','https://res.cloudinary.com/otra/image/upload/x.jpg'));
+    assert.deepEqual(revisions.edit(db,id,{contenido:other,segmento:'pieza',motivo:'Ajena'}).fotos_registradas,[]);
+  }finally{db.close();}
+});
+test('carrusel registra fotos pegadas de portada, galería y antes/después',()=>{
+  const db=setup(),base='https://res.cloudinary.com/tikaymi/image/upload/v1/';
+  try{
+    const slides=[{layout:'portada',data:{imageUrl:base+'a.jpg'}},{layout:'galeria',data:{photos:[{imageUrl:base+'b.jpg'},{imageUrl:base+'a.jpg'}]}},{layout:'antes-despues',data:{beforeUrl:base+'c.jpg',afterUrl:'https://fixture.invalid/foto.jpg'}}];
+    const id=db.prepare("INSERT INTO generated(tipo,idioma,contenido) VALUES('carrusel','es','{}')").run().lastInsertRowid;
+    assert.deepEqual(revisions.edit(db,id,{contenido:JSON.stringify({tipo:'producto',slides}),segmento:'pieza',motivo:'Fotos'}).fotos_registradas,[base+'a.jpg',base+'b.jpg',base+'c.jpg']);
+    const copyId=db.prepare("INSERT INTO generated(tipo,idioma,contenido) VALUES('copy','es','x')").run().lastInsertRowid;
+    assert.deepEqual(revisions.edit(db,copyId,{contenido:'Mira '+base+'d.jpg',motivo:'Texto'}).fotos_registradas,[]);
+  }finally{db.close();}
+});

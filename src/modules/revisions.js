@@ -1,5 +1,23 @@
 // Correcciones humanas y versionado de borradores. Cada edición vuelve a revisión.
+const { isCloudinaryPhoto } = require('../../public/visual-contract');
 const err = (status, message) => Object.assign(new Error(message), { status });
+
+// URLs de foto de una pieza visual: imagen única (resource.url) o carrusel (imageUrl, antes/después y galería).
+function photoUrls(tipo, contenido) {
+  let json; try { json = JSON.parse(contenido); } catch { return []; }
+  if (tipo === 'imagen_unica') return [json?.resource?.url].filter(Boolean);
+  if (tipo !== 'carrusel' || !Array.isArray(json?.slides)) return [];
+  return json.slides.flatMap(s => { const d = s?.data || {}; return [d.imageUrl, d.beforeUrl, d.afterUrl, ...(Array.isArray(d.photos) ? d.photos.map(p => p?.imageUrl) : [])]; }).filter(Boolean);
+}
+
+// Pegar una foto de Cloudinary de Tikaymi es la autorización humana: queda registrada en Biblioteca
+// para trazabilidad. Una URL ya registrada no se toca, así una foto retirada sigue retirada.
+function registerPastedPhotos(db, id, tipo, contenido) {
+  const urls = [...new Set(photoUrls(tipo, contenido).filter(isCloudinaryPhoto))];
+  const exists = db.prepare('SELECT 1 FROM assets WHERE url=?');
+  const insert = db.prepare("INSERT INTO assets(tipo,url,descripcion,autorizado_publicar) VALUES('foto',?,?,1)");
+  return urls.filter(url => !exists.get(url)).map(url => (insert.run(url, `Cloudinary · pegada en borrador #${id}`), url));
+}
 
 function getGenerated(db, id) {
   const row = db.prepare('SELECT * FROM generated WHERE id=?').get(id);
@@ -29,7 +47,8 @@ function edit(db, id, { contenido, segmento = null, motivo } = {}) {
     const revisionId = db.prepare('INSERT INTO generated_revisions(generated_id,version,contenido,segmento,motivo) VALUES(?,?,?,?,?)')
       .run(id, version, String(contenido), segmento, String(motivo).trim()).lastInsertRowid;
     db.prepare("UPDATE generated SET contenido=?, estado='revision' WHERE id=?").run(String(contenido), id);
-    return { id: Number(id), revision_id: Number(revisionId), version, estado: 'revision', segmento, motivo: String(motivo).trim(), anterior: current.contenido };
+    const fotos_registradas = registerPastedPhotos(db, id, current.tipo, String(contenido));
+    return { id: Number(id), revision_id: Number(revisionId), version, estado: 'revision', segmento, motivo: String(motivo).trim(), anterior: current.contenido, fotos_registradas };
   })();
 }
 
@@ -53,10 +72,12 @@ async function regenerate(db, id, { segmento = 'pieza', automatic_visual_repair 
     if(!result.changes)throw err(409,'Ya se usó la corrección automática. Acorta el campo indicado y guarda una corrección humana.');
   }
   const pack=current.package_id ? db.prepare('SELECT brief_json FROM content_packages WHERE id=?').get(current.package_id) : null;
+  // Un anuncio regenerado conserva sus códigos de campaña: los leads ya registrados siguen atribuidos.
+  let adBase; if (current.tipo === 'anuncio_meta') try { adBase = JSON.parse(current.contenido).codigo_base; } catch { adBase = undefined; }
   const generated = await content.generate(db, {
     post_id: current.post_id, plan_idea_id: current.plan_idea_id || undefined, tipo: current.tipo, idioma: current.idioma,
     brief:pack ? JSON.parse(pack.brief_json) : undefined,
-    platform_override:current.plataforma || undefined,
+    platform_override:current.plataforma || undefined, ad_base:adBase,
     source_content: current.contenido, strict: ['imagen_unica','carrusel','guion','prompt_flow'].includes(current.tipo),
     repair_feedback: `Segmento a corregir: ${segmento}\nMotivo: ${instruccion}`
   }, { fetchImpl, save: false, repair: false });
@@ -97,7 +118,7 @@ async function regenerate(db, id, { segmento = 'pieza', automatic_visual_repair 
     replacement = `${current.contenido.slice(0, start)}${heading}${replacementText}${current.contenido.slice(nextStart)}`;
   }
   const saved = edit(db, id, { contenido: replacement, segmento, motivo: instruccion });
-  if (Array.isArray(generated.pending) && current.tipo === 'copy') db.prepare('UPDATE generated SET pending_json=? WHERE id=?').run(JSON.stringify(generated.pending), id);
+  if (Array.isArray(generated.pending) && ['copy','anuncio_meta'].includes(current.tipo)) db.prepare('UPDATE generated SET pending_json=? WHERE id=?').run(JSON.stringify(generated.pending), id);
   return saved;
 }
 

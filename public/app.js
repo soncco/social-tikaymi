@@ -15,6 +15,7 @@ const LABELS = {
   alcance:'Alcance', interaccion:'Interacción', consideracion:'Consideración', intencion:'Intención', revision:'En revisión', publicado:'Publicado', programado:'Programado', analizado:'Analizado', borrador:'Borrador', aprobado:'Aprobado',
   instagram:'Instagram', facebook:'Facebook', tiktok:'TikTok', youtube_shorts:'YouTube Shorts', datos_insuficientes:'Datos insuficientes', senal_inicial:'Señal inicial', patron_probable:'Patrón probable', patron_confirmado:'Patrón confirmado',
   observado:'Dato observado', interpretacion:'Interpretación', recomendacion:'Recomendación', hipotesis:'Hipótesis', es:'Español', en:'Inglés', mixto:'Español e inglés', sin_clasificar:'Sin clasificar',
+  anuncio_meta:'Anuncio Meta',
 };
 const ESTADOS = ['borrador', 'revision', 'aprobado', 'programado', 'publicado', 'analizado'];
 let K = {};
@@ -23,6 +24,11 @@ let latestPosts = [];
 let bulkFeedback = null;
 let selectedPlanIdeaId = null;
 let selectedPlanId = null;
+let planIdeaFilter = 'activas';
+let openIdeaId = null;
+const GEN_FILTER_DEFAULT = { estado:'activos', q:'', tipo:'', idioma:'', plataforma:'', idea:null, agrupar:true };
+let genFilter = { ...GEN_FILTER_DEFAULT };
+let openGeneratedId = null;
 let siteLang = 'es';
 let siteKind = '';
 
@@ -285,13 +291,41 @@ async function contentCalendar() {
   document.querySelectorAll('.move').forEach(b => b.onclick = guard(async () => { if (b.dataset.state === 'aprobado' && !confirm('¿Confirmas que una persona revisó y aprueba esta publicación?')) return; await api('/posts/'+b.dataset.id,'PUT',{ estado:b.dataset.state }); toast('Estado actualizado'); go('contenido','calendario'); }));
   document.querySelectorAll('.idea-create').forEach(b => b.onclick = () => { selectedPlanIdeaId = Number(b.dataset.id); go('contenido','generar'); });
 }
+const IDEA_FILTERS = { activas:'Activas', propuesta:'Propuestas', aprobada:'Aprobadas', descartada:'Descartadas', todas:'Todas' };
+const ideaMatches = (idea, f) => f === 'todas' || (f === 'activas' ? idea.status !== 'descartada' : idea.status === f);
+const shortDate = v => { const d = String(v || '').slice(0,10); return /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + 'T12:00:00').toLocaleDateString('es-PE', { day:'numeric', month:'short', year:'numeric' }) : '—'; };
+const chips = (items, active, attr) => `<div class="chips">${items.map(([id, text, n]) => `<button type="button" class="chip${id === active ? ' on' : ''}" ${attr}="${esc(id)}">${esc(text)}${n === undefined ? '' : ` <span>${n}</span>`}</button>`).join('')}</div>`;
+const IDEA_STATUS_CLASS = { aprobada:'success', propuesta:'warn', descartada:'' };
+
 async function contentPlan() {
-  const [plans, llmStatus] = await Promise.all([api('/plans'), api('/llm')]);
+  const [plans, llmStatus, generated] = await Promise.all([api('/plans'), api('/llm'), api('/generated')]);
   const latest = plans.length ? await api('/plans/' + (selectedPlanId && plans.some(p => p.id === selectedPlanId) ? selectedPlanId : plans[0].id)) : null;
   const llmReady = llmStatus.proveedores.some(p => p.id === llmStatus.activo.provider && p.configurado);
-  $('#content-body').innerHTML = `<section class="card"><h3>De los resultados a un plan</h3><p class="muted">Combinamos la estrategia editorial, la copia local del sitio y las señales medidas por plataforma. La prioridad comercial no se presenta como resultado probado. <a href="#configuracion/estrategia">Revisar estrategia editorial</a></p><form class="form" id="plan-form"><label>Plan para<select name="cadence"><option value="semana">Una semana · 3 ideas</option><option value="mes">Un mes · 8 ideas</option></select></label><label>Objetivo comercial<select name="objetivo_negocio">${opts(K.OBJETIVOS_NEGOCIO,'consulta_calificada')}</select></label><div class="form-actions"><button type="button" class="secondary" id="save-analysis-plan">Guardar propuesta basada en datos</button><button type="button" class="primary" id="save-ai-plan" ${llmReady ? '' : 'disabled'}>Analizar y proponer con IA</button>${llmReady ? '' : '<span class="muted small">Configura una clave de IA para activar este botón.</span>'}</div></form><div id="plan-preview"></div></section>
-    ${plans.length ? `<label class="card">Ver plan<select id="plan-select">${plans.map(p => `<option value="${p.id}"${p.id === latest.id ? ' selected' : ''}>#${p.id} · ${esc(p.cadence)} · ${esc(p.created_at)}</option>`).join('')}</select></label>` : ''}<h2>${latest ? `Plan guardado #${latest.id} · ${latest.cadence} · ${latest.method === 'ia' ? 'propuesto con IA' : 'basado en datos'}` : 'Aún no hay planes guardados'}</h2>
-    ${latest ? latest.ideas.map(idea => `<article class="card"><div class="platform-head"><h3>${esc(idea.title)}</h3><span class="badge">${esc(label(idea.status))}</span></div><p class="muted small">${esc(idea.platforms.map(label).join(' + '))} · ${esc(label(idea.brief.idioma || 'es'))} · ${esc(label(idea.confidence))}</p><p><b>Por qué esta idea:</b> ${esc(idea.brief.editorial_reason || 'Responde al objetivo editorial del plan.')}</p><p><b>Dato de partida:</b> ${esc(idea.evidence)} ${idea.source_url ? `<a href="${esc(idea.source_url)}" target="_blank" rel="noopener">Ver fuente web ↗</a>` : ''}</p><p class="muted small"><b>Límites:</b> ${esc(idea.limitations)}</p><form class="form plan-idea-form" data-id="${idea.id}"><label>Tema o título<input name="title" value="${esc(idea.title)}" required></label><label>Fecha planeada<input type="date" name="planned_for" value="${esc(idea.planned_for || '')}"></label><label>Audiencia<input name="audiencia" value="${esc(idea.brief.audiencia)}" required></label><label>Llamado a la acción<input name="cta" value="${esc(idea.brief.cta)}" required></label><label>Objetivo de marketing<input name="objetivo_marketing" value="${esc(idea.brief.objetivo_marketing)}" required></label><div class="form-actions"><button type="button" class="secondary plan-action" data-status="propuesta">Guardar ajustes</button><button type="button" class="primary plan-action" data-status="aprobada">Aprobar idea</button><button type="button" class="tertiary plan-action" data-status="descartada">Descartar</button>${idea.status === 'aprobada' ? `<button type="button" class="secondary plan-generate" data-id="${idea.id}">Crear copy y materiales →</button>` : ''}</div></form></article>`).join('') : empty('◇','Crea tu primer plan','La propuesta inicial mostrará la evidencia y las limitaciones de cada idea.')}`;
+  const draftsByIdea = generated.reduce((acc, g) => { if (g.plan_idea_id) acc[g.plan_idea_id] = (acc[g.plan_idea_id] || 0) + 1; return acc; }, {});
+  const ideas = latest?.ideas || [];
+  const count = s => ideas.filter(x => ideaMatches(x, s)).length;
+  const visible = ideas.filter(x => ideaMatches(x, planIdeaFilter));
+  const planCard = p => `<button type="button" class="plan-pick${latest && p.id === latest.id ? ' on' : ''}" data-plan="${p.id}"><b>Plan #${p.id} · ${esc(shortDate(p.created_at))}</b><small>${esc(p.cadence === 'mes' ? 'Mes' : 'Semana')} · ${esc(label(p.objetivo_negocio))} · ${p.method === 'ia' ? 'IA' : 'Datos'}</small><span class="plan-counts">${p.ideas_aprobadas ? `<i class="dot ok"></i>${p.ideas_aprobadas} aprob.` : ''}${p.ideas_propuestas ? `<i class="dot warn"></i>${p.ideas_propuestas} por revisar` : ''}${p.ideas_descartadas ? `<i class="dot"></i>${p.ideas_descartadas} desc.` : ''}</span></button>`;
+  const ideaRow = idea => {
+    const drafts = draftsByIdea[idea.id] || 0;
+    const quick = idea.status === 'propuesta'
+      ? `<button type="button" class="primary small-btn idea-quick" data-id="${idea.id}" data-status="aprobada">Aprobar</button><button type="button" class="tertiary small-btn idea-quick" data-id="${idea.id}" data-status="descartada">Descartar</button>`
+      : idea.status === 'aprobada'
+        ? `<button type="button" class="secondary small-btn plan-generate" data-id="${idea.id}">Crear contenido →</button>`
+        : `<button type="button" class="tertiary small-btn idea-quick" data-id="${idea.id}" data-status="propuesta">Restaurar</button>`;
+    return `<details class="card idea-row status-${esc(idea.status)}" data-idea="${idea.id}"${idea.id === openIdeaId ? ' open' : ''}><summary>
+      <span class="idea-main"><span class="idea-title">${esc(idea.title)}</span><span class="idea-meta"><span class="badge ${IDEA_STATUS_CLASS[idea.status] || ''}">${esc(label(idea.status))}</span> ${esc(idea.planned_for ? shortDate(idea.planned_for) : 'Sin fecha')} · ${esc(idea.platforms.map(label).join(' + '))} · ${esc((idea.brief.idioma || 'es').toUpperCase())} · ${esc(label(idea.confidence))}${drafts ? ` · <a href="#contenido/generar" class="link idea-drafts" data-id="${idea.id}">${drafts} borrador${drafts === 1 ? '' : 'es'}</a>` : ''}</span></span>
+      <span class="row-actions">${quick}</span></summary>
+      <div class="idea-body"><dl class="idea-facts"><dt>Por qué esta idea</dt><dd>${esc(idea.brief.editorial_reason || 'Responde al objetivo editorial del plan.')}</dd><dt>Dato de partida</dt><dd>${esc(idea.evidence)} ${idea.source_url ? `<a href="${esc(idea.source_url)}" target="_blank" rel="noopener">Ver fuente web ↗</a>` : ''}</dd><dt>Límites</dt><dd class="muted">${esc(idea.limitations)}</dd></dl>
+      <form class="form plan-idea-form" data-id="${idea.id}"><label>Tema o título<input name="title" value="${esc(idea.title)}" required></label><label>Fecha planeada<input type="date" name="planned_for" value="${esc(idea.planned_for || '')}"></label><label>Audiencia<input name="audiencia" value="${esc(idea.brief.audiencia)}" required></label><label>Llamado a la acción<input name="cta" value="${esc(idea.brief.cta)}" required></label><label class="full">Objetivo de marketing<input name="objetivo_marketing" value="${esc(idea.brief.objetivo_marketing)}" required></label><div class="form-actions"><button type="button" class="secondary small-btn plan-action" data-status="propuesta">Guardar ajustes</button><button type="button" class="primary small-btn plan-action" data-status="aprobada">Guardar y aprobar</button>${idea.status !== 'descartada' ? '<button type="button" class="tertiary small-btn plan-action" data-status="descartada">Descartar</button>' : ''}${idea.status === 'aprobada' ? '<span class="muted small">«Guardar ajustes» devuelve la idea a propuesta para revisarla otra vez.</span>' : ''}</div></form></div></details>`;
+  };
+  $('#content-body').innerHTML = `<div class="plan-layout">
+    <aside class="plan-list"><div class="platform-head"><h3>Planes guardados <span class="muted small">${plans.length}</span></h3><button type="button" class="secondary small-btn" id="toggle-new-plan">+ Nuevo</button></div>${plans.length ? plans.map(planCard).join('') : '<p class="muted small">Todavía no hay planes.</p>'}</aside>
+    <div class="plan-main">
+      <details class="card new-plan" id="new-plan"${plans.length ? '' : ' open'}><summary><b>Nuevo plan</b> <span class="muted small">De los resultados a ideas con evidencia</span></summary><p class="muted">Combinamos la estrategia editorial, la copia local del sitio y las señales medidas por plataforma. La prioridad comercial no se presenta como resultado probado. <a href="#configuracion/estrategia">Revisar estrategia editorial</a></p><form class="form" id="plan-form"><label>Plan para<select name="cadence"><option value="semana">Una semana · 3 ideas</option><option value="mes">Un mes · 8 ideas</option></select></label><label>Objetivo comercial<select name="objetivo_negocio">${opts(K.OBJETIVOS_NEGOCIO,'consulta_calificada')}</select></label><div class="form-actions"><button type="button" class="secondary" id="save-analysis-plan">Guardar propuesta basada en datos</button><button type="button" class="primary" id="save-ai-plan" ${llmReady ? '' : 'disabled'}>Analizar y proponer con IA</button>${llmReady ? '' : '<span class="muted small">Configura una clave de IA para activar este botón.</span>'}</div></form><div id="plan-preview"></div></details>
+      ${latest ? `<div class="plan-head"><div><h2>Plan #${latest.id} <span class="muted small">${esc(shortDate(latest.created_at))}</span></h2><p class="muted small">${esc(latest.cadence === 'mes' ? 'Un mes' : 'Una semana')} · ${esc(label(latest.objetivo_negocio))} · ${latest.method === 'ia' ? 'propuesto con IA' : 'basado en datos'}</p></div>${chips(Object.entries(IDEA_FILTERS).map(([id, text]) => [id, text, count(id)]), planIdeaFilter, 'data-idea-filter')}</div>
+      ${visible.length ? visible.map(ideaRow).join('') : empty('◇','No hay ideas con este filtro', planIdeaFilter === 'activas' ? 'Todas las ideas de este plan fueron descartadas. Revisa «Descartadas» o crea un plan nuevo.' : 'Elige otro filtro.')}` : empty('◇','Crea tu primer plan','La propuesta inicial mostrará la evidencia y las limitaciones de cada idea.')}
+    </div></div>`;
   const form = $('#plan-form');
   form.onsubmit = e => e.preventDefault();
   const showPreview = guard(async () => {
@@ -300,17 +334,32 @@ async function contentPlan() {
     $('#plan-preview').innerHTML = `<p class="muted small">${esc(p.summary)}</p><h4>Vista previa</h4>${p.ideas.map(x => `<div class="notice info"><b>${esc(x.title)}</b> · ${esc(x.platforms.map(label).join(' + '))} · ${esc(label(x.brief.idioma))}<br><span class="small">${esc(x.brief.editorial_reason)} ${esc(x.evidence)} ${esc(x.limitations)}</span></div>`).join('')}`;
   });
   form.onchange = showPreview;
-  const savePlan = use_ai => guard(async () => { const b = use_ai ? $('#save-ai-plan') : $('#save-analysis-plan'); b.disabled = true; try { const p = await api('/plans','POST',{ ...formData(form), use_ai }); selectedPlanId = p.id; toast('Plan guardado; revisa y aprueba cada idea'); go('contenido','planificar'); } finally { b.disabled = false; } });
+  // La vista previa solo se calcula al abrir el panel: no pesa sobre quien solo revisa planes.
+  const panel = $('#new-plan');
+  let previewed = false;
+  const ensurePreview = () => { if (panel.open && !previewed) { previewed = true; showPreview(); } };
+  panel.ontoggle = ensurePreview; ensurePreview();
+  $('#toggle-new-plan').onclick = () => { panel.open = true; panel.scrollIntoView({ behavior:'smooth', block:'start' }); };
+  const savePlan = use_ai => guard(async () => { const b = use_ai ? $('#save-ai-plan') : $('#save-analysis-plan'); b.disabled = true; try { const p = await api('/plans','POST',{ ...formData(form), use_ai }); selectedPlanId = p.id; planIdeaFilter = 'activas'; toast('Plan guardado; revisa y aprueba cada idea'); go('contenido','planificar'); } finally { b.disabled = false; } });
   $('#save-analysis-plan').onclick = savePlan(false);
   $('#save-ai-plan').onclick = savePlan(true);
-  showPreview();
-  if ($('#plan-select')) $('#plan-select').onchange = e => { selectedPlanId = Number(e.target.value); go('contenido','planificar'); };
+  document.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { selectedPlanId = Number(b.dataset.plan); openIdeaId = null; go('contenido','planificar'); });
+  document.querySelectorAll('[data-idea-filter]').forEach(b => b.onclick = () => { planIdeaFilter = b.dataset.ideaFilter; go('contenido','planificar'); });
+  document.querySelectorAll('.idea-row').forEach(d => d.ontoggle = () => { if (d.open) openIdeaId = Number(d.dataset.idea); else if (openIdeaId === Number(d.dataset.idea)) openIdeaId = null; });
+  // Los botones del resumen actúan sin abrir ni cerrar la fila.
+  const stop = fn => e => { e.preventDefault(); e.stopPropagation(); fn(e); };
+  document.querySelectorAll('.idea-quick').forEach(b => b.onclick = stop(guard(async () => {
+    await api('/plan-ideas/' + b.dataset.id,'PUT',{ status:b.dataset.status });
+    toast(b.dataset.status === 'aprobada' ? 'Idea aprobada' : b.dataset.status === 'descartada' ? 'Idea descartada' : 'Idea restaurada'); go('contenido','planificar');
+  })));
   document.querySelectorAll('.plan-action').forEach(b => b.onclick = guard(async () => {
     const f = b.closest('form'); const d = formData(f);
     await api('/plan-ideas/' + f.dataset.id,'PUT',{ title:d.title, planned_for:d.planned_for, status:b.dataset.status, brief:{ audiencia:d.audiencia, cta:d.cta, objetivo_marketing:d.objetivo_marketing } });
+    openIdeaId = b.dataset.status === 'descartada' ? null : Number(f.dataset.id);
     toast('Idea actualizada'); go('contenido','planificar');
   }));
-  document.querySelectorAll('.plan-generate').forEach(b => b.onclick = () => { selectedPlanIdeaId = Number(b.dataset.id); go('contenido','generar'); });
+  document.querySelectorAll('.plan-generate').forEach(b => b.onclick = stop(() => { selectedPlanIdeaId = Number(b.dataset.id); go('contenido','generar'); }));
+  document.querySelectorAll('.idea-drafts').forEach(a => a.onclick = stop(() => { genFilter = { ...GEN_FILTER_DEFAULT, estado:'todos', idea:Number(a.dataset.id) }; go('contenido','generar'); }));
 }
 // Datos faltantes de un borrador: fuera del texto publicable, con el camino para resolverlos.
 function pendingBox(g) {
@@ -320,7 +369,9 @@ function pendingBox(g) {
   if (g.tipo === 'imagen_unica') { try { declared = JSON.parse(g.contenido).pending || []; } catch { /* JSON inválido: lo informa la revisión visual */ } }
   const items = [...new Set([...declared, ...inText])].map(x => String(x).replace(/^\[FALTA DATO:\s*|\]$/g, ''));
   if (!items.length) return '';
-  const how = g.tipo === 'imagen_unica'
+  const how = g.tipo === 'anuncio_meta'
+    ? 'Los textos del anuncio no los incluyen. Si quieres usarlos, apruébalos en Sitio web o Biblioteca y usa «Regenerar parte»; para el enlace, crea el anuncio desde un tour aprobado.'
+    : g.tipo === 'imagen_unica'
     ? 'Resuélvelos en «Revisar y descargar PNG» → Ajustar textos y resolver pendientes. Retira un dato solo si la imagen no lo afirma o ya lo comprobaste.'
     : inText.length
       ? 'El texto todavía contiene marcadores y no puede aprobarse. Usa «Editar texto» para escribir el dato verificado o retirar la frase.'
@@ -328,55 +379,93 @@ function pendingBox(g) {
   return `<div class="notice"><b>Datos que faltan (${items.length})</b><ul>${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul><span class="small">${how}</span></div>`;
 }
 
+// Anuncio Meta legible: un bloque por variante, con contador de caracteres y botón para copiar cada campo.
+function adView(g) {
+  let ad; try { ad = JSON.parse(g.contenido); } catch { return `<pre>${esc(g.contenido)}</pre>`; }
+  const field = (name, text, max) => text ? `<div class="ad-field"><div class="platform-head"><b>${esc(name)}</b><span class="muted small">${max ? `${text.length}/${max}` : ''} <button type="button" class="tertiary small-btn copy-field" data-text="${esc(text)}">Copiar</button></span></div><p>${esc(text).replace(/\n/g,'<br>')}</p></div>` : '';
+  return `<div class="ad-view"><p class="muted small">${esc(ad.objetivo_meta || '')} · ${esc((ad.ubicaciones || []).map(label).join(' + '))} · Botón: ${esc(ad.boton || '')}</p>${(ad.variantes || []).map(v => `<section class="card ad-variant"><h4>Variante ${esc(v.id)} · ${esc(v.angulo)} <span class="badge">${esc(v.campaign_code)}</span></h4>
+    ${field('Texto principal (visible: primeras 125 letras)', v.texto_principal, 0)}${field('Título', v.titulo, 40)}${field('Descripción', v.descripcion, 30)}
+    ${field('Mensaje predeterminado de WhatsApp', v.mensaje_whatsapp, 0)}${field('Enlace «Más información» (con UTM)', v.url_destino, 0)}</section>`).join('')}
+    ${(ad.warnings || []).length ? `<ul class="muted small">${ad.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}</div>`;
+}
+
 async function contentGenerate() {
-  const [posts, generated, info, plans, siteStatus] = await Promise.all([api('/posts'),api('/generated'),api('/approved-info'),api('/plans'),api('/site/status')]); latestPosts = posts;
+  const [posts, generated, info, plans, siteStatus, toursEs, toursEn] = await Promise.all([api('/posts'),api('/generated'),api('/approved-info'),api('/plans'),api('/site/status'),api('/site/pages?lang=es&kind=tour'),api('/site/pages?lang=en&kind=tour')]); latestPosts = posts;
+  const tours = [...toursEn, ...toursEs].filter(t => t.approved);
   const details = await Promise.all(plans.map(p => api('/plans/' + p.id)));
   const ideas = details.flatMap(p => p.ideas.filter(x => x.status === 'aprobada'));
-  const extra = '<option value="">Solo copy</option><option value="imagen_unica">Imagen única + copy</option><option value="carrusel">Carrusel + copy</option><option value="guion">Reel/video + copy</option><option value="prompt_flow">Reel/video + prompts + copy</option>';
-  $('#content-body').innerHTML = `${!info.some(x => x.autorizado_publicar) && !siteStatus.pages.approved ? '<div class="notice"><b>Antes de generar:</b> aprueba una página en Configuración → Sitio web o agrega información verificada en Biblioteca. Puedes planificar ideas desde las estadísticas entretanto.</div>' : ''}<div class="notice info">El copy se genera siempre. Los materiales adicionales son opcionales. Todo queda en revisión humana; no se publica automáticamente.</div>
-    <form class="card form package-form" data-source="idea"><div class="full"><h3>Desde una idea del plan</h3><p class="muted">Primero aprueba la idea en Planificar contenido. Se conserva el idioma previsto y recibirás un copy para cada plataforma destino.</p></div><label>Idea aprobada<select name="plan_idea_id" required><option value="">— Elegir —</option>${ideas.map(x => `<option value="${x.id}"${x.id === selectedPlanIdeaId ? ' selected' : ''}>${esc(x.title)} · ${esc(x.platforms.map(label).join(' + '))} · ${esc(label(x.brief.idioma || 'es'))}</option>`).join('')}</select></label><label>Materiales<select name="extra">${extra}</select></label><div class="form-actions"><button class="primary" ${!ideas.length ? 'disabled' : ''}>Generar borradores</button></div></form>
-    <details class="card"><summary>Crear sin plan ni publicación previa</summary><form class="form package-form" data-source="brief"><p class="muted full">Describe la intención de la pieza. La IA solo podrá usar datos de la biblioteca aprobada.</p><label>Tema o título<input name="titulo" required></label><label>Plataforma principal<select name="plataforma" required>${opts(K.PLATAFORMAS)}</select></label><label>Objetivo comercial<select name="objetivo_negocio">${opts(K.OBJETIVOS_NEGOCIO)}</select></label><label>Objetivo de marketing<input name="objetivo_marketing" required placeholder="Ej. resolver una duda frecuente"></label><label>Propósito<select name="objetivo_contenido">${opts(K.OBJETIVOS_CONTENIDO)}</select></label><label>Audiencia<input name="audiencia" required></label><label>Etapa<select name="etapa_embudo">${opts(K.ETAPAS)}</select></label><label>CTA<input name="cta" required></label><label>Resultado que medirás<input name="metrica_principal" required placeholder="Ej. conversaciones iniciadas"></label><label>Idioma<select name="idioma">${opts(K.IDIOMAS)}</select></label><label>Materiales<select name="extra">${extra}</select></label><div class="form-actions"><button class="primary">Generar borradores</button></div></form></details>
-    <details class="card"><summary>Usar una publicación existente como referencia (opcional)</summary><form class="form package-form" data-source="post"><label>Publicación<select name="post_id" required><option value="">— Elegir —</option>${posts.filter(p => !isPending(p)).map(p => `<option value="${p.id}">${esc(p.titulo)}</option>`).join('')}</select></label><label>Materiales<select name="extra">${extra}</select></label><label>Idioma<select name="idioma">${opts(K.IDIOMAS)}</select></label><div class="form-actions"><button class="primary">Generar borradores</button></div></form></details>
-    <section class="generated-section"><div class="platform-head"><h2>Borradores generados</h2><span class="muted small">${generated.length} pieza${generated.length === 1 ? '' : 's'}</span></div><div class="notice info">Las piezas visuales tienen un botón visible para abrir la revisión y descargar/exportar. Abre la tarjeta para consultar el copy y el resto del contenido.</div><div class="generated-toolbar"><label>Buscar<input id="generated-search" type="search" placeholder="Título o contenido"></label><label>Estado<select id="generated-status"><option value="">Todos</option>${['revision','aprobado','rechazado'].map(x => `<option value="${x}">${esc(label(x))}</option>`).join('')}</select></label><label>Tipo<select id="generated-type"><option value="">Todos</option>${['copy','guion','prompt_flow','carrusel','imagen_unica'].map(x => `<option value="${x}">${esc(label(x))}</option>`).join('')}</select></label></div><div id="generated-list"></div></section>`;
+  const extra = '<option value="">Solo copy</option><option value="imagen_unica">Imagen única + copy</option><option value="carrusel">Carrusel + copy</option><option value="guion">Reel/video + copy</option><option value="prompt_flow">Reel/video + prompts + copy</option><option value="anuncio_meta">Anuncio Meta: imagen + textos de anuncio</option><option value="anuncio_meta_carrusel">Anuncio Meta: carrusel + textos de anuncio</option>';
+  const openCreate = !!selectedPlanIdeaId || !generated.length;
+  $('#content-body').innerHTML = `<details class="card create-panel" id="create-panel"${openCreate ? ' open' : ''}><summary><b>＋ Crear contenido nuevo</b> <span class="muted small">Desde una idea aprobada, un brief libre o una publicación</span></summary>
+    ${!info.some(x => x.autorizado_publicar) && !siteStatus.pages.approved ? '<div class="notice"><b>Antes de generar:</b> aprueba una página en Configuración → Sitio web o agrega información verificada en Biblioteca. Puedes planificar ideas desde las estadísticas entretanto.</div>' : ''}<p class="muted small">El copy se genera siempre. Los materiales adicionales son opcionales. Todo queda en revisión humana; no se publica automáticamente.</p>
+    <form class="card flat form package-form" data-source="idea"><div class="full"><h3>Desde una idea del plan</h3><p class="muted">Primero aprueba la idea en Planificar contenido. Se conserva el idioma previsto y recibirás un copy para cada plataforma destino.</p></div><label>Idea aprobada<select name="plan_idea_id" required><option value="">— Elegir —</option>${ideas.map(x => `<option value="${x.id}"${x.id === selectedPlanIdeaId ? ' selected' : ''}>${esc(x.title)} · ${esc(x.platforms.map(label).join(' + '))} · ${esc(label(x.brief.idioma || 'es'))}</option>`).join('')}</select></label><label>Materiales<select name="extra">${extra}</select></label><div class="form-actions"><button class="primary" ${!ideas.length ? 'disabled' : ''}>Generar borradores</button></div></form>
+    <details class="card flat"><summary>Crear sin plan ni publicación previa</summary><form class="form package-form" data-source="brief"><p class="muted full">Describe la intención de la pieza. La IA solo podrá usar páginas aprobadas del sitio y datos de la biblioteca aprobada. Para promocionar un tour, elígelo: sus datos y su enlace se usan como fuente principal.</p><label class="full">Tour (opcional)<select name="source_url"><option value="">— Ninguno —</option>${tours.map(t => `<option value="${esc(t.url)}" data-title="${esc(t.title)}" data-lang="${esc(t.lang)}">${esc(t.title)} · ${esc(t.lang.toUpperCase())}</option>`).join('')}</select></label><label>Tema o título<input name="titulo" required></label><label>Plataforma principal<select name="plataforma" required>${opts(K.PLATAFORMAS)}</select></label><label>Objetivo comercial<select name="objetivo_negocio">${opts(K.OBJETIVOS_NEGOCIO)}</select></label><label>Objetivo de marketing<input name="objetivo_marketing" required placeholder="Ej. resolver una duda frecuente"></label><label>Propósito<select name="objetivo_contenido">${opts(K.OBJETIVOS_CONTENIDO)}</select></label><label>Audiencia<input name="audiencia" required></label><label>Etapa<select name="etapa_embudo">${opts(K.ETAPAS)}</select></label><label>CTA<input name="cta" required></label><label>Resultado que medirás<input name="metrica_principal" required placeholder="Ej. conversaciones iniciadas"></label><label>Idioma<select name="idioma">${opts(K.IDIOMAS)}</select></label><label>Materiales<select name="extra">${extra}</select></label><div class="form-actions"><button class="primary">Generar borradores</button></div></form></details>
+    <details class="card flat"><summary>Usar una publicación existente como referencia (opcional)</summary><form class="form package-form" data-source="post"><label>Publicación<select name="post_id" required><option value="">— Elegir —</option>${posts.filter(p => !isPending(p)).map(p => `<option value="${p.id}">${esc(p.titulo)}</option>`).join('')}</select></label><label>Materiales<select name="extra">${extra}</select></label><label>Idioma<select name="idioma">${opts(K.IDIOMAS)}</select></label><div class="form-actions"><button class="primary">Generar borradores</button></div></form></details></details>
+    <section class="generated-section"><div class="platform-head"><h2>Borradores generados</h2><span class="muted small">${generated.length} pieza${generated.length === 1 ? '' : 's'}</span></div>
+    <div id="generated-states"></div>
+    <div class="generated-toolbar"><label>Buscar<input id="generated-search" type="search" placeholder="Título, origen o contenido" value="${esc(genFilter.q)}"></label><label>Tipo<select id="generated-type"><option value="">Todos</option>${[...new Set(generated.map(g => g.tipo))].map(x => `<option value="${esc(x)}"${x === genFilter.tipo ? ' selected' : ''}>${esc(label(x))}</option>`).join('')}</select></label><label>Plataforma<select id="generated-platform"><option value="">Todas</option>${[...new Set(generated.map(g => g.plataforma).filter(Boolean))].map(x => `<option value="${esc(x)}"${x === genFilter.plataforma ? ' selected' : ''}>${esc(label(x))}</option>`).join('')}</select></label><label>Idioma<select id="generated-lang"><option value="">Todos</option>${[...new Set(generated.map(g => g.idioma))].map(x => `<option value="${esc(x)}"${x === genFilter.idioma ? ' selected' : ''}>${esc(label(x))}</option>`).join('')}</select></label><label class="check"><input type="checkbox" id="generated-group"${genFilter.agrupar ? ' checked' : ''}> Agrupar por origen</label></div>
+    <div id="generated-idea-filter"></div><div id="generated-list"></div></section>`;
+  const GEN_STATES = [['activos','Activos', g => g.estado !== 'rechazado'], ['revision','En revisión', g => g.estado === 'revision'], ['aprobado','Aprobados', g => g.estado === 'aprobado'], ['rechazado','Rechazados', g => g.estado === 'rechazado'], ['todos','Todos', () => true]];
+  const ORIGIN = { idea:'Idea del plan', publicacion:'Publicación', brief:'Brief libre' };
+  const STATE_CLASS = { aprobado:'success', revision:'warn', rechazado:'danger' };
+  // Resumen de una línea: los formatos JSON muestran su titular, no la estructura.
+  const snippet = g => {
+    try {
+      const j = JSON.parse(g.contenido);
+      if (g.tipo === 'anuncio_meta') return (j.variantes || []).map(v => v.gancho || v.titulo).filter(Boolean).join(' · ');
+      if (g.tipo === 'imagen_unica') return [j.visual?.headline, j.visual?.support].filter(Boolean).join(' — ');
+      if (g.tipo === 'carrusel') { const first = j.slides?.[0]?.data || {}; return `${first.titulo || first.h1 || 'Carrusel'} · ${(j.slides || []).length} láminas`; }
+    } catch { /* texto plano */ }
+    return String(g.contenido || '').replace(/[#*_`{}[\]]/g,'').replace(/\s+/g,' ').trim().slice(0,200);
+  };
+  const genCard = g => {
+    const failed = g.visual_review?.estado === 'revision_fallida';
+    const visual = g.tipo === 'imagen_unica' ? `<a class="btn secondary small-btn" href="/imagen-unica.html?id=${g.id}" target="_blank">Revisar y descargar PNG</a>` : g.tipo === 'carrusel' ? `<a class="btn secondary small-btn" href="/constructor/${encodeURIComponent('Tikaymi - Constructor de Carruseles.html')}?id=${g.id}" target="_blank">Revisar y exportar carrusel</a>` : '';
+    return `<details class="card generated-card" data-gen="${g.id}"${g.id === openGeneratedId ? ' open' : ''}><summary><span class="gen-main"><span class="gen-line"><b>${esc(label(g.tipo))}</b>${g.plataforma ? ` · ${esc(label(g.plataforma))}` : ''} · ${esc((g.idioma || '').toUpperCase())} · <span class="muted">#${g.id} · ${esc(shortDate(g.created_at))}</span></span><span class="gen-snippet">${esc(snippet(g))}</span></span><span class="badge ${STATE_CLASS[g.estado] || ''}">${failed ? 'Composición fallida · requiere revisión' : esc(label(g.estado))}</span></summary>
+      ${failed ? `<p class="notice">${esc(g.visual_review.errors.join(' · '))}</p>` : ''}${pendingBox(g)}${g.tipo === 'anuncio_meta' ? adView(g) : `<pre>${esc(g.contenido)}</pre>`}
+      <div class="form-actions gen-actions"><span class="action-group">${g.estado !== 'aprobado' ? `<button class="primary small-btn gen-state" data-id="${g.id}" data-state="aprobado">Aprobar</button>` : ''}${g.estado !== 'rechazado' ? `<button class="secondary small-btn gen-state" data-id="${g.id}" data-state="rechazado">Rechazar</button>` : ''}${visual}${g.tipo === 'carrusel' && g.estado === 'aprobado' ? `<button class="secondary small-btn download-gen" data-id="${g.id}">Descargar para el constructor</button>` : ''}</span>
+      <span class="action-group">${['copy','guion','prompt_flow','whatsapp','anuncio_meta'].includes(g.tipo) ? `<button class="tertiary small-btn gen-edit" data-id="${g.id}">Editar texto</button>` : ''}<button class="tertiary small-btn copy-gen" data-id="${g.id}">Copiar</button><button class="tertiary small-btn gen-regenerate" data-id="${g.id}">Regenerar parte</button><button class="tertiary small-btn gen-feedback" data-id="${g.id}">Feedback</button><button class="tertiary small-btn gen-history" data-id="${g.id}">Historial</button></span></div></details>`;
+  };
   const renderGenerated = () => {
-    const query = String($('#generated-search').value || '').toLowerCase().trim();
-    const status = $('#generated-status').value;
-    const type = $('#generated-type').value;
-    const filtered = generated.filter(g => (!status || g.estado === status) && (!type || g.tipo === type) && (!query || `${g.contenido} ${g.tipo} ${g.id}`.toLowerCase().includes(query)));
+    const query = genFilter.q.toLowerCase().trim();
+    const base = generated.filter(g => (!genFilter.tipo || g.tipo === genFilter.tipo) && (!genFilter.plataforma || g.plataforma === genFilter.plataforma) && (!genFilter.idioma || g.idioma === genFilter.idioma) && (!genFilter.idea || g.plan_idea_id === genFilter.idea) && (!query || `${g.origen_titulo || ''} ${g.contenido} ${g.tipo} ${g.id}`.toLowerCase().includes(query)));
+    const stateFn = (GEN_STATES.find(([id]) => id === genFilter.estado) || GEN_STATES[0])[2];
+    const filtered = base.filter(stateFn);
+    $('#generated-states').innerHTML = chips(GEN_STATES.map(([id, text, fn]) => [id, text, base.filter(fn).length]), genFilter.estado, 'data-gen-state');
+    const ideaTitle = genFilter.idea && generated.find(g => g.plan_idea_id === genFilter.idea)?.origen_titulo;
+    $('#generated-idea-filter').innerHTML = genFilter.idea ? `<div class="notice info filter-note">Mostrando borradores de la idea <b>${esc(ideaTitle || '#' + genFilter.idea)}</b> <button type="button" class="tertiary small-btn" id="clear-idea-filter">Quitar filtro ✕</button></div>` : '';
     const groups = new Map();
-    filtered.forEach(g => { const key = g.plan_idea_id ? `Idea del plan #${g.plan_idea_id}` : g.post_id ? `Publicación #${g.post_id}` : 'Pieza nueva'; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(g); });
-    $('#generated-list').innerHTML = filtered.length ? [...groups].map(([group, items]) => `<section class="generated-group"><h3>${esc(group)} <span class="muted small">${items.length}</span></h3>${items.map(g => { const summary = String(g.contenido || '').replace(/[#*_`{}[\]]/g,'').replace(/\s+/g,' ').trim().slice(0,220); return `<details class="card generated-card"><summary><span><b>${esc(label(g.tipo))}</b> · ${esc(label(g.idioma))} · #${g.id}</span><span class="badge">${esc(label(g.estado))}</span></summary><p class="muted small generated-summary">${esc(summary)}${g.contenido.length > 220 ? '…' : ''}</p>${pendingBox(g)}<pre>${esc(g.contenido)}</pre><div class="form-actions"><button class="primary small-btn gen-state" data-id="${g.id}" data-state="aprobado">Aprobar</button>${['copy','guion','prompt_flow','whatsapp'].includes(g.tipo) ? `<button class="tertiary small-btn gen-edit" data-id="${g.id}">Editar texto</button>` : ''}<button class="secondary small-btn gen-state" data-id="${g.id}" data-state="rechazado">Rechazar</button><button class="tertiary small-btn copy-gen" data-id="${g.id}">Copiar</button><button class="tertiary small-btn gen-feedback" data-id="${g.id}">Feedback</button><button class="tertiary small-btn gen-history" data-id="${g.id}">Historial</button><button class="secondary small-btn gen-regenerate" data-id="${g.id}">Regenerar parte</button>${g.tipo === 'carrusel' && g.estado === 'aprobado' ? ` <button class="secondary small-btn download-gen" data-id="${g.id}">Descargar para el constructor</button>` : ''}</div></details>`; }).join('')}</section>`).join('') : empty('✦','No hay borradores con estos filtros','Cambia el estado, el tipo o la búsqueda.');
+    filtered.forEach(g => {
+      const key = genFilter.agrupar ? `${g.origen}:${g.plan_idea_id || g.post_id || g.package_id || g.id}` : 'all';
+      if (!groups.has(key)) groups.set(key, { g, items:[] });
+      groups.get(key).items.push(g);
+    });
+    $('#generated-list').innerHTML = filtered.length ? [...groups.values()].map(({ g, items }) => genFilter.agrupar
+      ? `<section class="generated-group"><div class="group-head"><div><h3>${esc(g.origen_titulo || 'Pieza sin título')}</h3><p class="muted small">${esc(ORIGIN[g.origen] || '')}${g.plan_id ? ` · Plan #${g.plan_id}` : ''} · ${esc(shortDate(items[items.length - 1].created_at))}</p></div><span class="group-count">${items.length}</span></div>${items.map(genCard).join('')}</section>`
+      : items.map(genCard).join('')).join('') : empty('✦','No hay borradores con estos filtros','Cambia el estado, el tipo o la búsqueda.');
+    document.querySelectorAll('[data-gen-state]').forEach(b => b.onclick = () => { genFilter.estado = b.dataset.genState; renderGenerated(); });
+    if ($('#clear-idea-filter')) $('#clear-idea-filter').onclick = () => { genFilter.idea = null; renderGenerated(); };
+    document.querySelectorAll('.generated-card').forEach(d => d.ontoggle = () => { if (d.open) openGeneratedId = Number(d.dataset.gen); else if (openGeneratedId === Number(d.dataset.gen)) openGeneratedId = null; });
     document.querySelectorAll('.gen-state').forEach(b => b.onclick = guard(async () => { if (b.dataset.state === 'aprobado' && !confirm('¿Confirmas que una persona revisó este contenido?')) return; await api('/generated/'+b.dataset.id,'PUT',{ estado:b.dataset.state }); toast('Estado actualizado'); go('contenido','generar'); }));
     document.querySelectorAll('.gen-edit').forEach(b => b.onclick = () => {
       const item = generated.find(x => String(x.id) === b.dataset.id), card = b.closest('details');
       if (card.querySelector('.gen-edit-form')) return;
       const form = document.createElement('form'); form.className = 'form gen-edit-form';
       form.innerHTML = `<label class="full">Texto final<textarea name="contenido" rows="12">${esc(item.contenido)}</textarea></label><label class="full">Qué corregiste<input name="motivo" required placeholder="Ej. retiré el dato pendiente de horarios"></label><div class="form-actions"><button class="primary small-btn">Guardar y volver a revisión</button><button type="button" class="tertiary small-btn gen-edit-cancel">Cancelar</button></div>`;
-      card.querySelector('pre').replaceWith(form);
+      (card.querySelector('.ad-view') || card.querySelector('pre')).replaceWith(form);
       form.querySelector('.gen-edit-cancel').onclick = () => go('contenido','generar');
       form.onsubmit = guard(async e => { e.preventDefault(); await api('/generated/'+item.id+'/edit','PUT',{ ...formData(form), segmento:'pieza' }); toast('Corrección guardada; vuelve a revisión'); go('contenido','generar'); });
     });
+    document.querySelectorAll('.copy-field').forEach(b => b.onclick = guard(async () => { await navigator.clipboard.writeText(b.dataset.text); toast('Campo copiado'); }));
     document.querySelectorAll('.copy-gen').forEach(b => b.onclick = guard(async () => { const item=generated.find(x=>String(x.id)===b.dataset.id); await navigator.clipboard.writeText(item.contenido); toast('Contenido copiado'); }));
     document.querySelectorAll('.gen-feedback').forEach(b => b.onclick = guard(async () => { const motivo = prompt('¿Qué debe corregirse?'); if (!motivo) return; await api('/generated/'+b.dataset.id+'/feedback','POST',{ motivo }); toast('Feedback guardado'); }));
     document.querySelectorAll('.gen-history').forEach(b => b.onclick = guard(async () => { const rows = await api('/generated/'+b.dataset.id+'/versions'); alert(rows.length ? rows.map(x => `v${x.version}: ${x.motivo}`).join('\n') : 'No hay versiones anteriores.'); }));
     document.querySelectorAll('.gen-regenerate').forEach(b => b.onclick = guard(async () => { const segmento = prompt('Segmento (slide:1, clip:1 o pieza completa):','pieza'); if (!segmento) return; const instruccion = prompt('¿Qué debe cambiar?','Corregir el segmento manteniendo el mensaje y CTA.'); if (!instruccion) return; await api('/generated/'+b.dataset.id+'/regenerate','POST',{ segmento, instruccion }); toast('Nueva revisión generada'); go('contenido','generar'); }));
     document.querySelectorAll('.download-gen').forEach(b => b.onclick = () => { const item=generated.find(x=>String(x.id)===b.dataset.id); const blob=new Blob([item.contenido],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`tikaymi-carrusel-${item.id}.json`; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),500); });
-    document.querySelectorAll('.gen-state[data-state="aprobado"]').forEach(b => {
-      const item=generated.find(x=>String(x.id)===b.dataset.id);
-      if(item?.plataforma)b.closest('details').querySelector('summary > span').appendChild(document.createTextNode(' · '+label(item.plataforma)));
-      if(item?.visual_review?.estado==='revision_fallida'){
-        const card=b.closest('details');card.querySelector('summary .badge').textContent='Composición fallida · requiere revisión';
-        const notice=document.createElement('p');notice.className='notice';notice.textContent=item.visual_review.errors.join(' · ');b.parentNode.before(notice);
-      }
-      if(item?.tipo==='imagen_unica') {
-        const a=document.createElement('a'); a.className='btn secondary small-btn'; a.href='/imagen-unica.html?id='+item.id; a.target='_blank'; a.textContent='Revisar y descargar PNG'; b.closest('details').insertAdjacentElement('afterend',a);
-      }
-      if(item?.tipo==='carrusel') {
-        const a=document.createElement('a');a.className='btn secondary small-btn';a.href='/constructor/'+encodeURIComponent('Tikaymi - Constructor de Carruseles.html')+'?id='+item.id;a.target='_blank';a.textContent='Revisar y exportar carrusel';b.closest('details').insertAdjacentElement('afterend',a);
-      }
-    });
   };
-  ['generated-search','generated-status','generated-type'].forEach(id => $('#'+id).oninput = renderGenerated);
+  $('#generated-search').oninput = e => { genFilter.q = e.target.value; renderGenerated(); };
+  [['generated-type','tipo'],['generated-platform','plataforma'],['generated-lang','idioma']].forEach(([id, key]) => $('#'+id).onchange = e => { genFilter[key] = e.target.value; renderGenerated(); });
+  $('#generated-group').onchange = e => { genFilter.agrupar = e.target.checked; renderGenerated(); };
   renderGenerated();
   const failures=await api('/visual-failures');
   if(failures.length){
@@ -409,14 +498,24 @@ async function contentGenerate() {
     form.addEventListener('change',suggest);suggest();
     select.closest('label').appendChild(hint);
   });
+  // Elegir un tour completa el título y fija el idioma de su página: una pieza, una lengua.
+  const tourSelect = document.querySelector('.package-form select[name="source_url"]');
+  if (tourSelect) tourSelect.addEventListener('change', () => {
+    const option = tourSelect.selectedOptions[0], form = tourSelect.closest('form');
+    if (!option?.value) return;
+    if (!form.titulo.value.trim()) form.titulo.value = option.dataset.title;
+    form.idioma.value = option.dataset.lang;
+  });
   document.querySelectorAll('.package-form').forEach(f => f.onsubmit = guard(async e => {
     e.preventDefault(); const d = formData(f); const source = f.dataset.source;
     const input = { idioma:d.idioma, extra:d.extra || null };
+    if (d.extra === 'anuncio_meta_carrusel') { input.extra = 'anuncio_meta'; input.ad_visual = 'carrusel'; }
+    if (!d.source_url) delete d.source_url;
     if (source === 'idea') input.plan_idea_id = Number(d.plan_idea_id);
     else if (source === 'post') input.post_id = Number(d.post_id);
     else { delete d.extra; input.brief = d; }
     const b = f.querySelector('button'); b.disabled = true;
-    try { await api('/generate-package','POST',input); toast('Copy y materiales generados; revisa antes de aprobar'); go('contenido','generar'); }
+    try { await api('/generate-package','POST',input); toast(input.extra === 'anuncio_meta' ? 'Visual y textos de anuncio generados; revisa antes de aprobar' : 'Copy y materiales generados; revisa antes de aprobar'); go('contenido','generar'); }
     finally { b.disabled = false; }
   }));
 }
@@ -493,7 +592,7 @@ async function siteView() {
 }
 async function libraryView() {
   const [info,assets]=await Promise.all([api('/approved-info'),api('/assets')]);
-  $('#config-body').innerHTML=`<div class="notice info"><b>Fuente de verdad:</b> el asistente solo puede usar esta información autorizada o páginas aprobadas en Sitio web. Nunca debe inventar precios, servicios o testimonios.</div><div class="grid cols-2"><section><form class="card form" id="info-form"><div class="full"><h3>Información verificada</h3></div><label>Tipo<select name="tipo">${opts(K.INFO_TIPOS)}</select></label><label>Título<input name="titulo" required></label><label class="full">Contenido<textarea name="texto" rows="3" required></textarea></label><label>Fuente<input name="fuente" placeholder="Documento, persona o URL"></label><label class="check"><input type="checkbox" name="autorizado_publicar"> Autorizada para publicar</label><div class="form-actions"><button class="primary">Agregar información</button></div></form>${info.map(i=>`<article class="card"><div class="platform-head"><b>${esc(i.titulo)}</b><span class="badge">${esc(label(i.tipo))}</span></div><p>${esc(i.texto)}</p><label class="check"><input class="info-auth" data-id="${i.id}" type="checkbox"${i.autorizado_publicar?' checked':''}> Autorizada para publicar</label><button class="tertiary small-btn delete-info" data-id="${i.id}">Eliminar</button></article>`).join('')}</section><section><form class="card form" id="asset-form"><div class="full"><h3>Fotos y videos reales</h3></div><label>Tipo<select name="tipo">${opts(K.ASSET_TIPOS)}</select></label><label>URL<input name="url" type="url" required></label><label>Descripción<input name="descripcion"></label><label>Destino o uso<input name="destino" placeholder="Machu Picchu, reels…"></label><div class="form-actions"><button class="primary">Agregar recurso</button></div></form>${assets.map(a=>`<article class="card"><div class="platform-head"><b>${esc(a.descripcion||a.tipo)}</b><span class="badge">${esc(label(a.tipo))}</span></div><p class="muted small" style="word-break:break-all">${esc(a.url)}</p><button class="tertiary small-btn delete-asset" data-id="${a.id}">Eliminar</button></article>`).join('')}</section></div>`;
+  $('#config-body').innerHTML=`<div class="notice info"><b>Fuente de verdad:</b> el asistente solo puede usar esta información autorizada o páginas aprobadas en Sitio web. Nunca debe inventar precios, servicios o testimonios.</div><div class="grid cols-2"><section><form class="card form" id="info-form"><div class="full"><h3>Información verificada</h3></div><label>Tipo<select name="tipo">${opts(K.INFO_TIPOS)}</select></label><label>Título<input name="titulo" required></label><label class="full">Contenido<textarea name="texto" rows="3" required></textarea></label><label>Fuente<input name="fuente" placeholder="Documento, persona o URL"></label><label class="check"><input type="checkbox" name="autorizado_publicar"> Autorizada para publicar</label><div class="form-actions"><button class="primary">Agregar información</button></div></form>${info.map(i=>`<article class="card"><div class="platform-head"><b>${esc(i.titulo)}</b><span class="badge">${esc(label(i.tipo))}</span></div><p>${esc(i.texto)}</p><label class="check"><input class="info-auth" data-id="${i.id}" type="checkbox"${i.autorizado_publicar?' checked':''}> Autorizada para publicar</label><button class="tertiary small-btn delete-info" data-id="${i.id}">Eliminar</button></article>`).join('')}</section><section><form class="card form" id="asset-form"><div class="full"><h3>Fotos y videos reales</h3><p class="muted">Opcional: puedes pegar fotos de res.cloudinary.com/tikaymi directamente en la imagen única o el carrusel; al guardarlas aparecen aquí como autorizadas. Desmarca la autorización para impedir que una foto vuelva a usarse.</p></div><label>Tipo<select name="tipo">${opts(K.ASSET_TIPOS)}</select></label><label>URL<input name="url" type="url" required></label><label>Descripción<input name="descripcion"></label><label>Destino o uso<input name="destino" placeholder="Machu Picchu, reels…"></label><div class="form-actions"><button class="primary">Agregar recurso</button></div></form>${assets.map(a=>`<article class="card"><div class="platform-head"><b>${esc(a.descripcion||a.tipo)}</b><span class="badge">${esc(label(a.tipo))}</span></div><p class="muted small" style="word-break:break-all">${esc(a.url)}</p><button class="tertiary small-btn delete-asset" data-id="${a.id}">Eliminar</button></article>`).join('')}</section></div>`;
   $('#info-form').onsubmit=guard(async e=>{e.preventDefault();const d=formData(e.target);d.autorizado_publicar=e.target.autorizado_publicar.checked;await api('/approved-info','POST',d);toast('Información agregada');go('configuracion','biblioteca');});
   $('#asset-form').onsubmit=guard(async e=>{e.preventDefault();const data=formData(e.target);data.autorizado_publicar=e.target.autorizado_publicar.checked;await api('/assets','POST',data);toast('Recurso agregado');go('configuracion','biblioteca');});
   const assetApproval=document.createElement('label');assetApproval.className='check full';assetApproval.innerHTML='<input type="checkbox" name="autorizado_publicar"> Fotografía/video autorizado para publicación';$('#asset-form').appendChild(assetApproval);

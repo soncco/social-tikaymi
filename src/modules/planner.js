@@ -240,6 +240,14 @@ async function create(db, options = {}, { fetchImpl } = {}) {
   return get(db, id);
 }
 
+// Listado compacto: cada plan con el conteo de ideas por estado para elegirlo sin abrirlo.
+function list(db) {
+  return db.prepare(`SELECT p.*, COUNT(i.id) ideas_total,
+      SUM(i.status='propuesta') ideas_propuestas, SUM(i.status='aprobada') ideas_aprobadas, SUM(i.status='descartada') ideas_descartadas
+    FROM editorial_plans p LEFT JOIN plan_ideas i ON i.plan_id=p.id GROUP BY p.id ORDER BY p.id DESC`).all()
+    .map(p => ({ ...p, ideas_propuestas: p.ideas_propuestas || 0, ideas_aprobadas: p.ideas_aprobadas || 0, ideas_descartadas: p.ideas_descartadas || 0 }));
+}
+
 function updateIdea(db, id, body) {
   const current = db.prepare('SELECT * FROM plan_ideas WHERE id=?').get(id);
   if (!current) throw err('La idea no existe', 404);
@@ -255,4 +263,4 @@ function updateIdea(db, id, body) {
   return get(db, current.plan_id);
 }
 
-module.exports = { preview, create, get, updateIdea };
+module.exports = { preview, create, get, list, updateIdea };

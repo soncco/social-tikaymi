@@ -151,9 +151,7 @@ function api(db) {
   r.put('/editorial-strategy', wrap(req => editorialStrategy.update(db, req.body)));
 
   // Fase 2 — Generación con IA (siempre queda en revisión; aprobación humana manual)
-  r.get('/generated', wrap(req => (req.query.post_id
-    ? db.prepare('SELECT * FROM generated WHERE post_id=? ORDER BY id DESC').all(req.query.post_id)
-    : db.prepare('SELECT * FROM generated ORDER BY id DESC').all()).map(row=>({...row,visual_review:['imagen_unica','carrusel'].includes(row.tipo)?visualReview.inspect(db,row):null}))));
+  r.get('/generated', wrap(req => content.list(db, req.query).map(row=>({...row,visual_review:['imagen_unica','carrusel'].includes(row.tipo)?visualReview.inspect(db,row):null}))));
   r.post('/generate', wrapAsync(req => content.generate(db, req.body, {})));
   r.post('/generate-package', wrapAsync(req => content.generatePackage(db, req.body, {})));
   r.get('/visual-failures', wrap(() => db.prepare('SELECT * FROM failed_visual_reviews ORDER BY id DESC LIMIT 30').all()));
@@ -188,7 +186,7 @@ function api(db) {
 
   // Plan editorial: propuesta calculada con señales observadas y límites explícitos.
   r.get('/plans/preview', wrap(req => planner.preview(db, req.query)));
-  r.get('/plans', wrap(() => db.prepare('SELECT * FROM editorial_plans ORDER BY id DESC').all()));
+  r.get('/plans', wrap(() => planner.list(db)));
   r.get('/plans/:id', wrap(req => planner.get(db, req.params.id)));
   r.post('/plans', wrapAsync(req => planner.create(db, req.body)));
   r.put('/plan-ideas/:id', wrap(req => planner.updateIdea(db, req.params.id, req.body)));

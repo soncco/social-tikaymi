@@ -10,9 +10,29 @@ La base real contiene 50 publicaciones de Meta con métricas: 25 de Instagram y 
 
 ## Implementado
 
+### Anuncio Meta desde un tour (2026-10-06)
+
+- Nuevo tipo `anuncio_meta` (`src/modules/ads.js`) y formato **Anuncio Meta** en Crear con IA: `generatePackage({ extra:'anuncio_meta', ad_visual:'imagen_unica'|'carrusel' })` genera la pieza visual y, derivados de ella, 2–3 textos de anuncio. No se generan copies orgánicos. Plataforma del visual: Instagram o Facebook (TikTok/Shorts se sustituyen por Instagram); la fila del anuncio guarda `plataforma=NULL` y el JSON declara `ubicaciones: facebook + instagram`.
+- La IA redacta ángulo, gancho (≤125), cuerpo (aviso sobre 350, bloquea sobre 600; caso real de 373 caracteres bloqueaba el paquete), título (≤40) y descripción (≤30). El servidor añade `codigo_base` (`AD{IDIOMA}{NNN}`, siguiente libre), `campaign_code` por variante (`…A/B/C`), botón, mensaje predeterminado de WhatsApp con el código y URL del tour con `utm_source=meta&utm_medium=paid_social&utm_campaign=<base>&utm_content=<variante>`.
+- Tour de destino: `source_url` del brief si es un tour aprobado; si no, el tour aprobado más relacionado en el idioma; sin tour queda como dato pendiente. `packageBrief` conserva ahora `source_url` para regenerar.
+- Validación determinista: límites, variantes con ganchos distintos, sin «barato/low cost/cheap/mejor precio», sin urgencia, hashtags ni URL en el texto, y toda cifra con moneda debe aparecer en las fuentes aprobadas (comparación de dígitos: es una heurística, no prueba que el precio siga vigente). Una corrección automática; luego `failed_visual_reviews`. La aprobación bloquea `[FALTA DATO]` en los textos.
+- Regenerar un anuncio conserva `codigo_base` para no romper la atribución de leads ya registrados.
+- UI: selector de tours aprobados en el brief, vista legible por variante con contador y **Copiar** por campo, edición del JSON con **Editar texto** y filtro por tipo.
+- Pendiente: medidas 9:16 para Stories/Reels (la imagen única exporta 1080 × 1350), separar resultados pagados de orgánicos al importar métricas de anuncios, y lectura de Ads Manager.
+- Verificación: `npm test` 130/130 (`test/ads.test.js` con proveedor ficticio). No se probó con el proveedor de IA real ni se revisó la pantalla en navegador.
+
+### Fotos desde Cloudinary sin cargar Biblioteca (2026-10-06)
+
+- La imagen única y el constructor de carruseles aceptan URL pegadas de `https://res.cloudinary.com/tikaymi/image/upload/…` sin registrarlas antes. `/image/fetch/` (reenvía URL externas), otras cuentas y `http:` se rechazan (`public/visual-contract.js`: `isCloudinaryPhoto`, `photoAllowed`).
+- Al guardar la edición humana (`PUT /generated/:id/edit`), `revisions.edit` registra esas URL en `assets` como foto autorizada con descripción `Cloudinary · pegada en borrador #N` y devuelve `fotos_registradas`. Una URL ya existente no se modifica: desmarcarla en Biblioteca la bloquea aunque se vuelva a pegar.
+- La aprobación sigue exigiendo una foto registrada y autorizada; la validación de lo que produce la IA no acepta URL de Cloudinary no registradas, así la IA no puede inventarlas.
+- La Biblioteca queda opcional para fotos; sigue siendo la única fuente de testimonios y de datos que no estén en páginas aprobadas. Generar texto ya no depende de ella si hay páginas web aprobadas relacionadas.
+- Verificación: `npm test` 125/125, con pruebas para imagen única, carrusel, cuentas ajenas, `fetch` y fotos retiradas. Se comprobó con `curl` que `res.cloudinary.com/tikaymi` responde con `access-control-allow-origin: *`. No se probó en navegador la exportación PNG con una foto real de Cloudinary.
+
 ### Copy publicable, contacto y plantillas de imagen única (2026-10-05, segunda entrega)
 
 - El copy ya no lleva `[FALTA DATO: …]` dentro del texto. La IA escribe los faltantes después de `---PENDIENTES---`; el servidor los separa y los guarda en `generated.pending_json` (migración idempotente). Las líneas que solo contienen un marcador se retiran del texto. Un marcador dentro de una frase se conserva y **bloquea la aprobación** del copy (422) hasta corregirlo.
+- UX de listados (2026-10-07): Planificar contenido usa lista lateral de planes (`GET /plans` devuelve `ideas_total/aprobadas/propuestas/descartadas` vía `planner.list`) y filas de idea compactas con filtro por estado y acciones rápidas. Borradores generados agrupa por origen con `origen` y `origen_titulo` (`content.list`, join con idea/publicación/paquete), chips de estado con conteo y filtros de tipo/plataforma/idioma que se conservan tras cada acción. No validado visualmente en navegador.
 - Borradores generados muestra **Datos que faltan** con el camino para resolverlos, y un botón **Editar texto** para copy, guion y prompts (usa `PUT /generated/:id/edit`; vuelve a revisión y versiona). Regenerar un copy actualiza sus pendientes.
 - Hashtags: `sanitizeCopy` borraba el `#` de cualquier línea que empezaba con `#` (lo trataba como encabezado Markdown), por eso `#Cusco` salía como `Cusco`. Ahora solo quita encabezados con espacio (`## Título`). Cada plataforma pide su línea final de hashtags (IG 4–6, FB 2–3, TikTok 3–5, Shorts 2–3).
 - Contacto: **Estrategia editorial** admite un WhatsApp opcional con código de país. Si existe, el servidor añade una línea `📲 WhatsApp … · wa.me/…` antes de los hashtags cuando la IA no lo incluyó. Sin número, el copy no muestra ningún número y aparece como dato pendiente. El número nunca lo propone la IA.
@@ -20,6 +40,7 @@ La base real contiene 50 publicaciones de Meta con métricas: 25 de Instagram y 
 - Imagen única: el renderer usa las plantillas del constructor (producto = portada con foto a sangre, informativo = portada editorial, testimonio = cita), con el logo, la cresta, la escala tipográfica y el marcador de foto pendiente del constructor, más `tikaymi.com` en el pie. Las etiquetas siguen el idioma de la pieza. El editor muestra **Datos que faltan** fuera del desplegable.
 - `validateRender` ya no marca como cortado el texto display que desborda su línea sin recorte (Cormorant con `line-height` ≤ 1). Sigue detectando texto fuera del lienzo, recortado por un contenedor o encima del logo. Afecta también al constructor de carruseles, que comparte el validador.
 - Verificación: `npm test` 123/123. El fixture `test/visual-render.html` se ejecutó en Chromium headless (Playwright): producto, informativo, testimonio y detección de desbordamiento en PASS; se revisaron capturas de las tres variantes. Sigue sin verificarse una descarga PNG real con html2canvas y una foto autorizada con CORS, y una generación con el proveedor real.
+- La línea verde decorativa («cresta») ahora reproduce la montaña del logo (pico menor, pico mayor y su pliegue), a 190 × 76 px y trazo 6, en el constructor, la imagen única y los tres carruseles de referencia. Antes era un zigzag de 200 × 26 px que no se reconocía.
 - Datos existentes: los copies #13 y #14 se generaron antes del cambio y conservan los marcadores en el texto; #14 ya estaba aprobado. No se modificaron.
 
 ### Imagen única y composición móvil (2026-10-05)
@@ -110,7 +131,7 @@ La base real contiene 50 publicaciones de Meta con métricas: 25 de Instagram y 
 
 - Revisar las seis piezas `Sin título` pendientes de **Contenido → Publicaciones**. Les falta `Métrica principal` y Meta no devolvió texto para inferirla; no conviene rellenarla por suposición. El detalle del criterio inicial está en `docs/CLASIFICACION-HISTORICA.md`.
 - Registrar leads reales con código de campaña; actualmente no hay datos de conversión.
-- Revisar las fichas relevantes en **Configuración → Sitio web** y aprobar solo información vigente para redactar. Cargar en **Biblioteca aprobada** los servicios, precios, testimonios, fotos y videos adicionales.
+- Revisar las fichas relevantes en **Configuración → Sitio web** y aprobar solo información vigente para redactar. Cargar en **Biblioteca aprobada** testimonios reales y datos que no estén en la web; las fotos se pegan desde Cloudinary al revisar cada pieza.
 - Confirmar una clave de IA válida y probar una generación real; las integraciones se probaron con `fetch` simulado.
 - Validar los adaptadores TikTok y YouTube con exportaciones reales.
 - Renovar el token Meta antes del 2026-12-20 o migrar a usuario del sistema.

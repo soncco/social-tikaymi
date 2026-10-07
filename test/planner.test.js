@@ -139,3 +139,23 @@ test('API permite previsualizar, guardar y aprobar una idea de plan', async () =
     assert.equal(updated.ideas[0].brief.titulo, 'Idea ajustada');
   } finally { server.close(); db.close(); }
 });
+
+test('listado de planes resume ideas por estado y borradores conservan su origen', () => {
+  const db = open(':memory:');
+  const planId = db.prepare("INSERT INTO editorial_plans(cadence,objetivo_negocio) VALUES('semana','consulta_calificada')").run().lastInsertRowid;
+  const empty = db.prepare("INSERT INTO editorial_plans(cadence,objetivo_negocio) VALUES('mes','confianza')").run().lastInsertRowid;
+  const idea = (status, position) => db.prepare("INSERT INTO plan_ideas(plan_id,title,platforms,brief_json,evidence,limitations,confidence,status,position) VALUES(?,?,?,?,?,?,?,?,?)")
+    .run(planId, 'Idea ' + position, '["instagram"]', '{}', 'e', 'l', 'datos_insuficientes', status, position).lastInsertRowid;
+  const approved = idea('aprobada', 1); idea('propuesta', 2); idea('descartada', 3);
+  const list = planner.list(db);
+  assert.deepEqual(list.map(p => p.id), [Number(empty), Number(planId)]);
+  assert.deepEqual([list[1].ideas_total, list[1].ideas_aprobadas, list[1].ideas_propuestas, list[1].ideas_descartadas], [3, 1, 1, 1]);
+  assert.deepEqual([list[0].ideas_total, list[0].ideas_aprobadas], [0, 0]);
+  db.prepare("INSERT INTO generated(plan_idea_id,tipo,idioma,contenido) VALUES(?,'copy','es','Texto')").run(approved);
+  const pkg = db.prepare("INSERT INTO content_packages(brief_json,concept_json,primary_json,sources_json,resources_json,cta,warnings_json,pending_json,validations_json) VALUES(?,'{}','{}','[]','[]','cta','[]','[]','[]')").run(JSON.stringify({ titulo:'Brief libre' })).lastInsertRowid;
+  db.prepare("INSERT INTO generated(package_id,tipo,idioma,contenido) VALUES(?,'copy','en','Text')").run(pkg);
+  const rows = content.list(db);
+  assert.deepEqual(rows.map(r => [r.origen, r.origen_titulo, r.plan_id ?? null]), [['brief','Brief libre',null], ['idea','Idea 1',Number(planId)]]);
+  assert.equal(content.list(db, { post_id: 99 }).length, 0);
+  db.close();
+});
