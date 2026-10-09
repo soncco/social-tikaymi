@@ -42,6 +42,14 @@ test('plantillas producto, informativo y testimonio requieren recursos y citas a
   assert.equal(visual.validateSingle(image('producto','')).ready,false);
   assert.equal(visual.validateSingle({...image(),pending:['Confirmar información pendiente']}).ready,false);
 });
+test('imagen única admite 4:5 y 9:16 sin alterar el contrato del carrusel',()=>{
+  for(const aspect of ['4:5','9:16']){
+    const sample=image();sample.visual={...sample.visual,aspect,overlayStrength:70,decoration:false,safeTop:12,safeBottom:18};
+    assert.equal(visual.validateSingle(sample,{resources:[sample.resource.url]}).ready,true);
+  }
+  const invalid=image();invalid.visual.aspect='horizontal';
+  assert.match(visual.validateSingle(invalid).errors.join(),/visual.aspect/);
+});
 test('límites por layout rechazan portada, cuerpo, pasos y columnas densos',()=>{
   const long='palabra '.repeat(30);
   for(const [layout,data] of [['portada',{h1:long}],['ficha',{body:long}],['pasos',{steps:[{title:'Paso',text:long}]}],['bueno-saberlo',{notes:[{title:'Consejo',text:long}]}],['columnas',{colA:{heading:'Opciones',items:[long]}}]]){

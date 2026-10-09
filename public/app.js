@@ -29,12 +29,14 @@ let openIdeaId = null;
 const GEN_FILTER_DEFAULT = { estado:'activos', q:'', tipo:'', idioma:'', plataforma:'', idea:null, agrupar:true };
 let genFilter = { ...GEN_FILTER_DEFAULT };
 let openGeneratedId = null;
+let openCampaignId = null;
 let siteLang = 'es';
 let siteKind = '';
 
 const label = k => LABELS[k] || String(k ?? '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
 const opts = (list, selected, blank = false) => (blank ? '<option value="">— No cambiar —</option>' : '') + (list || []).map(v => `<option value="${esc(v)}"${v === selected ? ' selected' : ''}>${esc(label(v))}</option>`).join('');
 const formData = form => Object.fromEntries([...new FormData(form)].filter(([,v]) => v !== ''));
+const makeSearchableSelect = window.TikaymiSearchableSelect;
 const number = v => typeof v === 'number' && Number.isFinite(v) ? v : null;
 const metricValue = v => number(v) !== null ? v : number(v?.valor) !== null ? v.valor : null;
 const fmt = v => {
@@ -382,13 +384,16 @@ function pendingBox(g) {
 // Anuncio Meta legible: un bloque por variante, con contador de caracteres y botón para copiar cada campo.
 function adView(g) {
   let ad; try { ad = JSON.parse(g.contenido); } catch { return `<pre>${esc(g.contenido)}</pre>`; }
-  const field = (name, text, max) => text ? `<div class="ad-field"><span class="ad-label">${esc(name)}${max ? `<small class="${text.length > max ? 'over' : ''}">${text.length}/${max}</small>` : ''}</span><p>${esc(text).replace(/\n/g,'<br>')}</p><button type="button" class="tertiary small-btn copy-field" data-text="${esc(text)}">Copiar</button></div>` : '';
-  const variants = ad.variantes || [];
-  return `<div class="ad-view" data-ad="${g.id}"><dl class="ad-summary"><div><dt>Objetivo</dt><dd>${esc(ad.objetivo_meta || '—')}</dd></div><div><dt>Ubicaciones</dt><dd>${esc((ad.ubicaciones || []).map(label).join(' + ') || '—')}</dd></div><div><dt>Botón</dt><dd>${esc(ad.boton || '—')}</dd></div><div><dt>Precio</dt><dd>${ad.precio ? esc(ad.precio) : '<span class="muted">Sin precio · a consultar</span>'}</dd></div></dl>
+  const field = (name, text, max, soft=false) => text ? `<div class="ad-field"><span class="ad-label">${esc(name)}<small class="${max && text.length > max ? soft ? 'suggest' : 'over' : ''}">${text.length}${max ? '/'+max+(soft?' recomendado':'') : ''}</small></span><p>${esc(text).replace(/\n/g,'<br>')}</p><button type="button" class="tertiary small-btn copy-field" data-text="${esc(text)}">Copiar</button></div>` : '';
+  const variants = ad.variantes || [], profile = ad.profile || 'business_suite';
+  const titleMax = profile === 'business_suite' ? 25 : 40;
+  return `<div class="ad-view" data-ad="${g.id}"><dl class="ad-summary"><div><dt>Objetivo</dt><dd>${esc(label(ad.objetivo_negocio || ad.objetivo_meta || '—'))}</dd></div><div><dt>Ubicaciones</dt><dd>${esc((ad.ubicaciones || []).map(label).join(' + ') || '—')}</dd></div><div><dt>Botón del anuncio</dt><dd>${esc(ad.boton || '—')}</dd></div><div><dt>Precio</dt><dd>${ad.price_label || typeof ad.precio==='string' ? esc(ad.price_label||ad.precio) : '<span class="muted">Sin precio · a consultar</span>'}</dd></div></dl>
+    <p class="muted small">Perfil: ${esc(profile === 'business_suite' ? 'Business Suite simplificado' : 'Ads Manager')}. Botón adicional de la plantilla de conversación: ${esc(ad.boton_plantilla||'no configurado')}. El texto principal puede verse truncado según la ubicación.</p>
+    ${field('Saludo de WhatsApp', ad.saludo, profile === 'business_suite' ? 300 : 0)}
     <div class="ad-tabs" role="tablist">${variants.map((v, i) => `<button type="button" role="tab" class="ad-tab${i ? '' : ' on'}" data-variant="${i}">Variante ${esc(v.id)} <span>${esc(v.angulo)}</span></button>`).join('')}</div>
     ${variants.map((v, i) => `<section class="ad-variant" data-variant="${i}"${i ? ' hidden' : ''}><p class="ad-code">Código <b>${esc(v.campaign_code)}</b></p>
-    ${field('Texto principal', v.texto_principal, 0)}${field('Título', v.titulo, 40)}${field('Descripción', v.descripcion, 30)}
-    ${field('Mensaje de WhatsApp', v.mensaje_whatsapp, 0)}${field('Enlace con UTM', v.url_destino, 0)}</section>`).join('')}
+    ${field('Texto principal', v.texto_principal, 0)}${field('Título', v.titulo, titleMax,profile==='ads_manager')}${field('Descripción', v.descripcion, 30,profile==='ads_manager')}
+    ${field('Mensaje predefinido', v.mensaje_whatsapp, profile === 'business_suite' ? 80 : 0)}${field('Enlace con UTM', v.url_destino, 0)}</section>`).join('')}
     ${(ad.warnings || []).length ? `<details class="ad-notes"><summary>Indicaciones para el Administrador de anuncios (${ad.warnings.length})</summary><ul class="muted small">${ad.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></details>` : ''}</div>`;
 }
 
@@ -482,11 +487,11 @@ async function contentGenerate() {
     });
     $('#content-body').appendChild(section);
   }
-  // Precio opcional solo para anuncios: lo escribe una persona y el servidor lo coloca en textos y diseño.
+  // Precio opcional: la persona confirma importe, unidad y condiciones para este tour.
   document.querySelectorAll('.package-form').forEach(form => {
     const select = form.querySelector('select[name="extra"]');
-    const priceLabel = document.createElement('label'); priceLabel.className = 'ad-price-field'; priceLabel.hidden = true;
-    priceLabel.innerHTML = 'Precio a mostrar (opcional)<input name="precio" maxlength="40" placeholder="Ej. Desde USD 890 por persona"><small class="muted">Solo si Tikaymi lo confirmó. Aparece en la imagen o en la ficha del carrusel, y la IA puede citarlo literal. Vacío = «a consultar».</small>';
+    const priceLabel = document.createElement('div'); priceLabel.className = 'ad-price-field full'; priceLabel.hidden = true;
+    priceLabel.innerHTML = `<label>Perfil de interfaz<select name="ad_profile"><option value="business_suite">Business Suite simplificado · título 25 / saludo 300 / mensaje 80</option><option value="ads_manager">Ads Manager · recomendaciones editoriales</option></select></label><details><summary>Mostrar precio confirmado (opcional)</summary><div class="form"><p class="muted small full">Para mostrar un precio nuevo, selecciona antes el tour aprobado al que corresponde. Si no conoces la unidad o las condiciones, deja el importe vacío.</p><label>Importe<input name="price_amount" type="number" min="0.01" step="0.01" placeholder="Ej. 440"></label><label>Moneda<input name="price_currency" maxlength="3" placeholder="USD"></label><label>Modalidad<select name="price_mode"><option value="">— Elegir —</option><option value="desde">Desde</option><option value="fijo">Precio fijo</option></select></label><label>Unidad<select name="price_unit"><option value="">— Elegir —</option><option value="persona">Por persona</option><option value="grupo">Por grupo</option><option value="otra">Otra unidad</option></select></label><label>Otra unidad, si corresponde<input name="price_unit_detail" placeholder="Ej. por vehículo"></label><label>Condiciones confirmadas<input name="price_conditions" placeholder="Ej. Según fecha y disponibilidad confirmada"></label><label>Vigencia, si existe<input name="price_valid_until" type="date"></label><label class="full">Quién lo confirmó o fuente<input name="price_confirmation" placeholder="Ej. Deicy, lista de precios vigente"></label><p class="muted small full">Sin importe, el anuncio sale sin precio. El precio antiguo en texto se conserva, pero no puede marcarse como campaña preparada hasta completar unidad y condiciones.</p></div></details>`;
     select.closest('label').after(priceLabel);
     const toggle = () => { priceLabel.hidden = !String(select.value).startsWith('anuncio_meta'); };
     select.addEventListener('change', toggle); toggle();
@@ -511,20 +516,26 @@ async function contentGenerate() {
     select.closest('label').appendChild(hint);
   });
   // Elegir un tour completa el título y fija el idioma de su página: una pieza, una lengua.
-  const tourSelect = document.querySelector('.package-form select[name="source_url"]');
-  if (tourSelect) tourSelect.addEventListener('change', () => {
-    const option = tourSelect.selectedOptions[0], form = tourSelect.closest('form');
-    if (!option?.value) return;
-    if (!form.titulo.value.trim()) form.titulo.value = option.dataset.title;
-    form.idioma.value = option.dataset.lang;
+  const tourSelect = document.querySelector('.package-form[data-source="brief"] select[name="source_url"]');
+  const tourSearch = makeSearchableSelect(tourSelect, {
+    force: true, placeholder: 'Busca por nombre del tour…',
+    onSelect: option => {
+      const form = tourSelect.closest('form');
+      if (!form.titulo.value.trim()) form.titulo.value = option.dataset.title;
+      form.idioma.value = option.dataset.lang;
+      form.titulo.dispatchEvent(new Event('input', { bubbles: true }));
+      form.idioma.dispatchEvent(new Event('change', { bubbles: true }));
+    }
   });
+  // Ideas aprobadas y publicaciones de referencia también pueden formar listas largas.
+  document.querySelectorAll('.package-form select').forEach(select => makeSearchableSelect(select, { placeholder: 'Escribe para filtrar opciones…' }));
   const briefForm = document.querySelector('.package-form[data-source="brief"]');
   if (briefForm) {
     const lang = briefForm.elements.idioma, audience = briefForm.elements.audiencia;
     const syncAudience = () => { if (!audience.dataset.edited) audience.value = lang.value === 'en' ? strategy.primary_audience : strategy.secondary_audience; };
     lang.addEventListener('change', syncAudience);
     audience.addEventListener('input', () => { audience.dataset.edited = '1'; });
-    tourSelect?.addEventListener('change', syncAudience);
+    tourSearch?.addEventListener('change', syncAudience);
     const stageFor = { consulta_calificada:'consulta', cotizacion:'cotizacion', reserva:'reserva', reconocimiento:'alcance', confianza:'consideracion', seguimiento:'interaccion' };
     const metricFor = { consulta_calificada:'consultas calificadas o conversaciones iniciadas', cotizacion:'solicitudes de cotización', reserva:'reservas confirmadas', reconocimiento:'alcance y personas alcanzadas', confianza:'guardados, respuestas y consultas', seguimiento:'respuestas y conversaciones reanudadas' };
     const goal = briefForm.elements.objetivo_negocio;
@@ -552,8 +563,11 @@ async function contentGenerate() {
     const input = { idioma:d.idioma, extra:d.extra || null };
     if (d.extra === 'anuncio_meta_carrusel') { input.extra = 'anuncio_meta'; input.ad_visual = 'carrusel'; }
     if (!d.source_url) delete d.source_url;
-    if (input.extra === 'anuncio_meta' && d.precio) input.precio = d.precio;
-    delete d.precio;
+    if (input.extra === 'anuncio_meta') {
+      input.ad_profile = d.ad_profile || 'business_suite';
+      if (d.price_amount) input.precio = { amount:Number(d.price_amount),currency:d.price_currency,mode:d.price_mode,unit:d.price_unit,unit_detail:d.price_unit_detail || '',conditions:d.price_conditions || '',valid_until:d.price_valid_until || null,confirmation:d.price_confirmation || '',product_url:d.source_url || '' };
+    }
+    for (const key of Object.keys(d)) if (key.startsWith('price_') || key === 'ad_profile') delete d[key];
     if (source === 'idea') input.plan_idea_id = Number(d.plan_idea_id);
     else if (source === 'post') input.post_id = Number(d.post_id);
     else {
@@ -573,20 +587,70 @@ async function contentGenerate() {
     finally { b.disabled = false; }
   }));
 }
+async function contentAdvertising() {
+  const [campaigns,strategy] = await Promise.all([api('/ads/campaigns'),api('/editorial-strategy')]);
+  const details = await Promise.all(campaigns.map(c => api('/ads/campaigns/'+c.id)));
+  const states = {contenido_revision:'Contenido en revisión',creatividad_aprobada:'Creatividad aprobada',campana_preparada:'Campaña preparada',lanzada_manual:'Lanzada manualmente',resultados_registrados:'Resultados registrados'};
+  $('#content-body').innerHTML = `<div class="notice info"><b>Publicidad en Meta</b><p>Flujo: anuncio → WhatsApp → consulta calificada → cotización → reserva. Los anuncios se crean en «Crear con IA». Aquí preparas cada campaña y registras lo que sucede en Meta; Tikaymi Lab no lanza campañas.</p><p>El país indica ubicación geográfica de segmentación, no nacionalidad. Deja sin confirmar lo que todavía sea una hipótesis. Público Advantage+ y Contenido Advantage+ son ajustes distintos de Meta.</p></div>${details.map(c => {
+    const b=c.brief||{},v=c.variants||[],p=c.price&&typeof c.price==='object'?c.price:{};
+    const field=(key,title,hint='',type='text')=>`<label>${title}<input name="${key}" type="${type}" value="${esc(b[key]||'')}"${hint?` placeholder="${esc(hint)}"`:''}></label>`;
+    const priceField=(key,title,hint='',type='text')=>`<label>${title}<input name="${key}" type="${type}" value="${esc(p[key]||'')}"${hint?` placeholder="${esc(hint)}"`:''}></label>`;
+    return `<details class="card ad-campaign" data-id="${c.id}"${String(c.id)===String(openCampaignId)?' open':''}><summary><b>Campaña #${c.id}</b> · ${esc(c.country||'País pendiente')} · ${esc(states[c.status]||c.status)} <span class="muted">${esc(v.map(x=>x.code).join(' · '))}</span></summary>
+      <p class="muted small">Producto: ${b.product_url?`<a href="${esc(b.product_url)}" target="_blank" rel="noopener">${esc(b.product_url)}</a>`:'Sin tour elegido'} · Fuentes y visual en el paquete exportable. Los códigos ayudan a reconocer consultas; la persona puede editarlos al escribir.</p>
+      <p>${c.visual?`<a href="${c.visual.tipo==='imagen_unica'?`/imagen-unica.html?id=${c.visual.id}`:`/constructor/${encodeURIComponent('Tikaymi - Constructor de Carruseles.html')}?id=${c.visual.id}`}" target="_blank" rel="noopener">Revisar ${c.visual.tipo==='carrusel'?'carrusel':'imagen'} ↗</a>`:'Visual pendiente'} · Visual: ${esc(c.visual?.estado||'pendiente')} · <button type="button" class="tertiary small-btn ad-open-draft">Revisar textos del anuncio</button></p>
+      <form class="form ad-brief-form" data-id="${c.id}"><div class="full"><h3>Brief de campaña</h3><p class="muted small">Completa solo decisiones confirmadas. País y presupuesto no se eligen automáticamente.</p></div>
+      ${field('country','País de ubicación','Colombia o Costa Rica')}${field('audience','Público propuesto','Descripción verificable del público')}${field('audience_reason','Por qué probar ese público','Hipótesis o evidencia')}<label>Base de la propuesta<select name="audience_basis"><option value="">— Pendiente —</option><option value="hipotesis"${b.audience_basis==='hipotesis'?' selected':''}>Hipótesis por probar</option><option value="evidencia"${b.audience_basis==='evidencia'?' selected':''}>Basada en evidencia observada</option></select></label>${field('whatsapp','WhatsApp de destino confirmado','+51 ...')}
+      ${field('budget_amount','Presupuesto','Importe','number')}${field('budget_currency','Moneda','USD, PEN...')}
+      <label>Modalidad<select name="budget_mode"><option value="">— Pendiente —</option><option value="diario"${b.budget_mode==='diario'?' selected':''}>Diario</option><option value="total"${b.budget_mode==='total'?' selected':''}>Total</option></select></label><label>Perfil de interfaz<select name="profile"><option value="business_suite"${b.profile==='business_suite'?' selected':''}>Business Suite simplificado</option><option value="ads_manager"${b.profile==='ads_manager'?' selected':''}>Ads Manager</option></select></label>
+      ${field('start_date','Inicio','', 'date')}${field('end_date','Fin','', 'date')}${field('timezone','Zona horaria','America/Lima')}${field('hours','Horario real de atención','Ej. Lun–Vie, 9:00–18:00')}${field('test_variable','Qué quieres probar','Ej. gancho o público')}
+      <label>Destino de conversación<select name="destination"><option value="whatsapp">Solo WhatsApp</option></select><small class="muted">La optimización disponible depende de la cuenta. Pixel no es requisito universal para iniciar conversaciones.</small></label>
+      <label class="check"><input name="advantage_audience" type="checkbox"${b.advantage_audience?' checked':''}> Público Advantage+ propuesto</label><label class="check"><input name="advantage_creative" type="checkbox"${b.advantage_creative?' checked':''}> Contenido Advantage+ propuesto</label><label class="check full"><input name="claims_confirmed" type="checkbox"${b.claims_confirmed?' checked':''}> Revisé cada beneficio, inclusión y precio frente al tour y las fuentes aprobadas</label><label class="check full"><input name="decisions_confirmed" type="checkbox"${b.decisions_confirmed?' checked':''}> Confirmo país de ubicación, presupuesto, fechas, horario de atención y WhatsApp de destino</label>
+      <div class="form-actions"><button class="secondary">Guardar brief</button><button class="primary ad-prepare" type="button">Comprobar y marcar preparada</button></div></form><div class="ad-check-feedback" role="status"></div>
+      <details><summary>Confirmar o corregir precio del anuncio</summary><p class="muted small">Precio actual: ${esc(c.price_label||(typeof c.price==='string'?c.price:'Sin precio'))}. Si guardas, el visual y los textos vuelven a revisión; comprueba ambos antes de preparar.</p><form class="form ad-price-update"><label>Importe<input name="amount" type="number" min="0.01" step="0.01" value="${esc(p.amount||'')}"></label><label>Moneda<input name="currency" maxlength="3" value="${esc(p.currency||'')}"></label><label>Modalidad<select name="mode"><option value="">— Elegir —</option><option value="desde"${p.mode==='desde'?' selected':''}>Desde</option><option value="fijo"${p.mode==='fijo'?' selected':''}>Fijo</option></select></label><label>Unidad<select name="unit"><option value="">— Elegir —</option><option value="persona"${p.unit==='persona'?' selected':''}>Por persona</option><option value="grupo"${p.unit==='grupo'?' selected':''}>Por grupo</option><option value="otra"${p.unit==='otra'?' selected':''}>Otra</option></select></label>${priceField('unit_detail','Otra unidad','Ej. por vehículo')}${priceField('conditions','Condiciones confirmadas','Ej. Sujeto a disponibilidad')}${priceField('valid_until','Vigencia, si existe','','date')}${priceField('confirmation','Quién confirmó o fuente','Ej. Deicy, tarifa vigente')}<div class="form-actions"><button class="secondary">Guardar precio y volver a revisión</button></div></form></details>
+      <div class="form-actions"><label>Nuevo país, campaña separada<input class="ad-clone-country" placeholder="Ej. Costa Rica"></label><button class="secondary ad-clone" type="button">Duplicar para ese país con códigos nuevos</button><button class="secondary ad-export" type="button">Descargar paquete JSON para revisión</button></div>
+      <details><summary>Guía para copiar en Meta</summary><p>Destino: WhatsApp. Objetivo: conversación que permita cotizar. Confirma en tu cuenta las opciones de optimización disponibles. Crea un anuncio por variante; usa su título, texto, saludo, mensaje y código. La ubicación por país no garantiza nacionalidad. Si cambias público, presupuesto o creatividad a la vez, la diferencia de resultados no prueba cuál causó el cambio.</p><ul>${v.map(x=>`<li>${esc(x.letter)} · ${esc(x.code)} · ${esc(x.country||'País por confirmar')}</li>`).join('')}</ul></details>
+      <form class="form ad-launch-form" data-id="${c.id}"><label>Fecha real de lanzamiento manual<input name="date" type="date"></label>${v.map(x=>`<div class="full"><b>IDs de Meta, variante ${esc(x.code)} (opcionales)</b></div><label>ID campaña<input data-letter="${esc(x.letter)}" data-ext="campaign_id" value="${esc(x.external_campaign_id||'')}"></label><label>ID conjunto<input data-letter="${esc(x.letter)}" data-ext="adset_id" value="${esc(x.external_adset_id||'')}"></label><label>ID anuncio<input data-letter="${esc(x.letter)}" data-ext="ad_id" value="${esc(x.external_ad_id||'')}"></label>`).join('')}<div class="form-actions"><button class="secondary">Registrar lanzamiento</button></div></form>
+      <details class="ad-results" data-id="${c.id}"><summary>Resultados pagados y consultas</summary><div class="ad-results-body"></div>
+      <form class="form ad-metric-form" data-id="${c.id}"><label>Variante<select name="variant_id">${v.map(x=>`<option value="${x.id}">${esc(x.code)}</option>`).join('')}</select></label><label>Fuente<input name="source" value="manual" required></label><label>Período desde<input name="period_start" type="date" required></label><label>Período hasta<input name="period_end" type="date" required></label><label>Gasto (vacío si no se conoce)<input name="spend" type="number" min="0" step="0.01"></label><label>Moneda<input name="currency" placeholder="USD"></label><label>Impresiones<input name="impressions" type="number" min="0"></label><label>Alcance<input name="reach" type="number" min="0"></label><label>Clics<input name="clicks" type="number" min="0"></label><label>Qué cuentan los clics<input name="click_definition" placeholder="Ej. clics en enlace"></label><label>Conversaciones según Meta<input name="conversations" type="number" min="0"></label><label>Definición de conversación<input name="conversation_definition" placeholder="Ej. conversaciones iniciadas"></label><div class="form-actions"><button class="secondary">Guardar período pagado</button></div></form>
+      <details><summary>Importar CSV de resultados pagados</summary><p class="muted small">Vista previa y mapeo de columnas. No se mezclará con estadísticas orgánicas.</p><input class="ad-csv-file" type="file" accept=".csv,text/csv"><div class="ad-csv-map form"></div><button class="secondary ad-csv-preview" type="button">Previsualizar CSV</button><button class="primary ad-csv-import" type="button" disabled>Importar filas válidas</button><div class="ad-csv-output"></div></details></details></details>`;
+  }).join('') || '<div class="card"><p>Aún no hay anuncios. Crea un «Anuncio Meta» en Contenido → Crear con IA.</p></div>'}<div id="country-compare"></div>`;
+  document.querySelectorAll('.ad-campaign').forEach(card=>{
+    const id=card.dataset.id,form=card.querySelector('.ad-brief-form');
+    const refresh=()=>{openCampaignId=id;go('contenido','publicidad');};
+    card.addEventListener('toggle',()=>{if(card.open)openCampaignId=id;});
+    form.onsubmit=guard(async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(form));d.advantage_audience=!!form.elements.advantage_audience.checked;d.advantage_creative=!!form.elements.advantage_creative.checked;d.claims_confirmed=!!form.elements.claims_confirmed.checked;d.decisions_confirmed=!!form.elements.decisions_confirmed.checked;await api('/ads/campaigns/'+id,'PUT',d);toast('Brief guardado');refresh();});
+    card.querySelector('.ad-prepare').onclick=async()=>{try{await api('/ads/campaigns/'+id+'/prepare','POST',{});toast('Campaña preparada para copiar en Meta');refresh();}catch(error){card.querySelector('.ad-check-feedback').innerHTML=`<div class="notice danger"><b>Qué falta para preparar</b><p>${esc(error.message).replace(/; /g,'<br>')}</p></div>`;}};
+    card.querySelector('.ad-price-update').onsubmit=guard(async e=>{e.preventDefault();await api('/ads/campaigns/'+id+'/price','PUT',Object.fromEntries(new FormData(e.target)));toast('Precio actualizado; revisa y aprueba visual y textos otra vez');refresh();});
+    card.querySelector('.ad-clone').onclick=guard(async()=>{const country=card.querySelector('.ad-clone-country').value.trim();const cloned=await api('/ads/campaigns/'+id+'/clone','POST',{country});toast('Campaña separada con códigos nuevos');openCampaignId=cloned.id;go('contenido','publicidad');});
+    card.querySelector('.ad-export').onclick=guard(async()=>{const pack=await api('/ads/campaigns/'+id+'/export');const a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify(pack,null,2)],{type:'application/json'}));a.href=url;a.download=`tikaymi-campana-${id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+    card.querySelector('.ad-open-draft').onclick=()=>{openGeneratedId=Number(details.find(c=>String(c.id)===id).generated_id);go('contenido','generar');};
+    card.querySelector('.ad-launch-form').onsubmit=guard(async e=>{e.preventDefault();const external_ids={};for(const field of e.target.querySelectorAll('[data-ext]')){external_ids[field.dataset.letter] ||= {};external_ids[field.dataset.letter][field.dataset.ext]=field.value.trim();}await api('/ads/campaigns/'+id+'/launch','POST',{date:e.target.elements.date.value,external_ids});toast('Lanzamiento manual registrado');refresh();});
+    const resultDetails=card.querySelector('.ad-results');
+    resultDetails.ontoggle=guard(async()=>{if(!resultDetails.open)return;const r=await api('/ads/campaigns/'+id+'/results');const num=x=>x==null?'No calculable':`${fmt(x)}${r.currency?' '+r.currency:''}`;resultDetails.querySelector('.ad-results-body').innerHTML=`<p>Período: ${esc(r.period?`${r.period.from} a ${r.period.to}`:'Sin registros')} · Gasto: ${esc(num(r.spend))} · Moneda: ${esc(r.currency||'Sin datos o varias monedas')}</p><p>Meta informó ${fmt(r.conversations_reported)} conversaciones; Tikaymi registró ${fmt(r.leads_registered)} consultas, ${fmt(r.qualified)} calificadas, ${fmt(r.quoted)} cotizadas y ${fmt(r.reserved)} reservas.</p><p>Costo por conversación (gasto / ${fmt(r.conversations_reported)}): ${esc(num(r.cost_per_conversation))} · por consulta calificada (gasto / ${fmt(r.qualified)}): ${esc(num(r.cost_per_qualified))} · por reserva (gasto / ${fmt(r.reserved)}): ${esc(num(r.cost_per_reservation))}.</p><p>Avance a cotización (${fmt(r.quoted)} / ${fmt(r.qualified)}): ${r.quote_progress==null?'No calculable':fmt(r.quote_progress*100)+'%'} · a reserva (${fmt(r.reserved)} / ${fmt(r.quoted)}): ${r.reservation_progress==null?'No calculable':fmt(r.reservation_progress*100)+'%'}. ${esc(r.reach_note||'')}</p><p class="muted small">${esc(r.limits.join(' '))}</p>`;});
+    card.querySelector('.ad-metric-form').onsubmit=guard(async e=>{e.preventDefault();await api('/ads/metrics','POST',formData(e.target));toast('Resultados pagados guardados');refresh();});
+    const file=card.querySelector('.ad-csv-file'),map=card.querySelector('.ad-csv-map'),output=card.querySelector('.ad-csv-output'),importButton=card.querySelector('.ad-csv-import');let csv='';
+    file.onchange=guard(async()=>{csv=await file.files[0].text();const header=await api('/ads/metrics/headers','POST',{csv});map.innerHTML=['variant_id','period_start','period_end','spend','currency','impressions','reach','clicks','click_definition','conversations','conversation_definition','source'].map(key=>`<label>${esc(key)}<select name="${esc(key)}"><option value="">— Valor fijo o ausente —</option>${header.map(h=>`<option value="${esc(h)}"${h===key?' selected':''}>${esc(h)}</option>`).join('')}</select></label>`).join('');importButton.disabled=true;});
+    const csvInput=()=>({csv,mapping:Object.fromEntries([...map.querySelectorAll('select')].map(s=>[s.name,s.value]).filter(([,v])=>v)),defaults:{source:'csv_meta',variant_id:Number(card.querySelector('.ad-metric-form select[name="variant_id"]').value)}});
+    card.querySelector('.ad-csv-preview').onclick=guard(async()=>{const result=await api('/ads/metrics/preview','POST',csvInput());output.innerHTML=`<p>${result.rows.length} filas · ${result.valid?'Sin errores':'Corrige antes de importar'}</p>${result.rows.slice(0,20).map(r=>`<p>Fila ${r.line}: ${esc(r.errors.join(' · ')||JSON.stringify(r.data))}</p>`).join('')}`;importButton.disabled=!result.valid;});
+    importButton.onclick=guard(async()=>{const rows=await api('/ads/metrics/import','POST',csvInput());toast(`${rows.length} períodos importados`);refresh();});
+  });
+  const groups=[...new Set(details.filter(c=>c.country).map(c=>c.generated_id))].filter(id=>details.filter(c=>c.generated_id===id&&c.country).length>1);
+  if(groups.length){const comparisons=await Promise.all(groups.map(id=>api('/ads/compare/'+id)));$('#country-compare').innerHTML=comparisons.map(group=>`<section class="card tablewrap"><h3>Comparación por país · anuncio #${group.generated_id}</h3><table><thead><tr><th>Ubicación</th><th>Período</th><th>Gasto</th><th>Impresiones</th><th>Alcance</th><th>Conversaciones Meta</th><th>Consultas Tikaymi</th><th>Calificadas</th><th>Reservas</th></tr></thead><tbody>${group.countries.map(x=>`<tr><td>${esc(x.country)}</td><td>${esc(x.period?`${x.period.from} a ${x.period.to}`:'—')}</td><td>${x.spend==null?'—':fmt(x.spend)+' '+esc(x.currency||'')}</td><td>${fmt(x.impressions)}</td><td>${fmt(x.reach)}</td><td>${fmt(x.conversations_reported)}</td><td>${fmt(x.leads_registered)}</td><td>${fmt(x.qualified)}</td><td>${fmt(x.reserved)}</td></tr>`).join('')}</tbody></table><p class="muted small">${esc(group.limitations.join(' '))}</p></section>`).join('');}
+}
 async function contenido(sub = 'publicaciones') {
   sub = sub || 'publicaciones';
-  $('#view').innerHTML = pageHead('Planificación y producción','Contenido','De las estadísticas a un plan, y del plan a piezas aprobadas.',`<button class="primary" id="new-post">+ Nueva publicación</button>`) + subnav({ planificar:'Planificar contenido', publicaciones:'Publicaciones', generar:'Crear con IA', calendario:'Calendario editorial' },sub) + '<div id="content-body"></div>';
+  $('#view').innerHTML = pageHead('Planificación y producción','Contenido','De las estadísticas a un plan, y del plan a piezas aprobadas.',`<button class="primary" id="new-post">+ Nueva publicación</button>`) + subnav({ planificar:'Planificar contenido', publicaciones:'Publicaciones', generar:'Crear con IA', publicidad:'Publicidad', calendario:'Calendario editorial' },sub) + '<div id="content-body"></div>';
   $('#new-post').onclick = () => contentEditor();
-  if (sub === 'planificar') await contentPlan(); else if (sub === 'generar') await contentGenerate(); else if (sub === 'calendario') await contentCalendar(); else await contentPosts();
+  if (sub === 'planificar') await contentPlan(); else if (sub === 'generar') await contentGenerate(); else if (sub === 'publicidad') await contentAdvertising(); else if (sub === 'calendario') await contentCalendar(); else await contentPosts();
 }
 
 /* Consultas ------------------------------------------------------------- */
 async function leadsView() {
   const leads = await api('/leads');
   $('#consultas-body').innerHTML = `<div class="grid cols-3"><div class="card kpi business"><small>Total registradas</small><strong>${leads.length}</strong></div><div class="card kpi intent"><small>Calificadas</small><strong>${leads.filter(l=>['calificado','cotizado','reservado'].includes(l.estado)).length}</strong></div><div class="card kpi business"><small>Reservas</small><strong>${leads.filter(l=>l.estado==='reservado').length}</strong></div></div>
-    <form class="card form" id="lead-form"><div class="full"><h3>Registrar una consulta</h3><p class="muted">El código permite saber qué publicación produjo el contacto.</p></div><label>Código de la campaña<input name="campaign_code" placeholder="Ej. HUMANTAY-SEP"></label><label>Origen<input name="fuente" placeholder="WhatsApp, sitio web…"></label><label>Estado<select name="estado">${opts(K.LEAD_ESTADOS)}</select></label><label>Fecha de viaje<input type="date" name="fecha_viaje"></label><label>Número de viajeros<input type="number" min="1" name="viajeros"></label><label>Notas<input name="notas" placeholder="Interés, dudas, presupuesto…"></label><div class="form-actions"><button class="primary">Registrar consulta</button></div></form>
-    <div class="card tablewrap"><table><thead><tr><th>Consulta</th><th>Viaje</th><th>Atribución</th><th>Estado</th></tr></thead><tbody>${leads.map(l=>`<tr><td><b>${esc(l.fuente || 'Sin origen')}</b><div class="post-meta">${esc(l.notas || '')}</div></td><td>${esc(l.fecha_viaje || '—')} · ${esc(l.viajeros || '—')} viajeros</td><td>${l.post_id ? '<span class="badge success">Atribuida</span>' : '<span class="badge warn">Sin atribuir</span>'}<div class="post-meta">${esc(l.campaign_code || 'Sin código')}</div></td><td><select class="lead-state" data-id="${l.id}">${opts(K.LEAD_ESTADOS,l.estado)}</select></td></tr>`).join('') || '<tr><td colspan="4">Todavía no hay consultas registradas.</td></tr>'}</tbody></table></div>`;
-  $('#lead-form').onsubmit = guard(async e => { e.preventDefault(); const d=formData(e.target); if(d.viajeros)d.viajeros=Number(d.viajeros); const r=await api('/leads','POST',d); toast(r.atribuido?'Consulta registrada y atribuida':'Consulta guardada; el código no coincide con una publicación'); go('consultas','leads'); });
+    <form class="card form" id="lead-form"><div class="full"><h3>Registrar una consulta</h3><p class="muted">El código puede vincular una publicación orgánica o una variante de anuncio. La persona puede editarlo: confirma el origen al conversar.</p></div><label>Código de campaña o anuncio<input name="campaign_code" placeholder="Ej. ADES001A"></label><label>Origen declarado<input name="fuente" placeholder="WhatsApp, sitio web…"></label><label>Estado<select name="estado">${opts(K.LEAD_ESTADOS)}</select></label><label>Fecha de viaje<input type="date" name="fecha_viaje"></label><label>Número de viajeros<input type="number" min="1" name="viajeros"></label><label>País de residencia declarado<input name="country_residence" placeholder="Solo si la persona lo dijo"></label><label>Fecha de adquisición<input name="acquired_at" type="date"><small class="muted">Si queda vacío, se usa la fecha de registro.</small></label><label class="full">Notas<input name="notas" placeholder="Interés, dudas, presupuesto…"></label><div class="form-actions"><button class="primary">Registrar consulta</button></div></form>
+    <div class="card tablewrap"><table><thead><tr><th>Consulta</th><th>Viaje</th><th>Atribución</th><th>Estado</th></tr></thead><tbody>${leads.map(l=>`<tr><td><b>${esc(l.fuente || 'Sin origen')}</b><div class="post-meta">${esc(l.notas || '')}</div></td><td>${esc(l.fecha_viaje || '—')} · ${esc(l.viajeros || '—')} viajeros<br><small>${esc(l.country_residence||'Residencia no declarada')}</small></td><td>${l.ad_variant_id ? '<span class="badge success">Anuncio</span>' : l.post_id ? '<span class="badge success">Orgánico</span>' : '<span class="badge warn">Origen desconocido</span>'}<div class="post-meta">${esc(l.campaign_code || 'Sin código')}</div></td><td><select class="lead-state" data-id="${l.id}">${opts(K.LEAD_ESTADOS,l.estado)}</select></td></tr>`).join('') || '<tr><td colspan="4">Todavía no hay consultas registradas.</td></tr>'}</tbody></table></div>`;
+  $('#lead-form').onsubmit = guard(async e => { e.preventDefault(); const d=formData(e.target); if(d.viajeros)d.viajeros=Number(d.viajeros); const r=await api('/leads','POST',d); toast(r.atribuido?`Consulta registrada · origen ${r.origen}`:'Consulta guardada sin atribución confirmada'); go('consultas','leads'); });
   document.querySelectorAll('.lead-state').forEach(s => s.onchange = guard(async () => { await api('/leads/'+s.dataset.id,'PUT',{estado:s.value}); toast('Estado actualizado'); }));
 }
 function trackingView() {

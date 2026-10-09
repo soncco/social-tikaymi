@@ -6,7 +6,7 @@ const preview = document.querySelector('.preview'), previewFrame = document.getE
 function fitPreview(){
   const style=getComputedStyle(preview), available=preview.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight);
   const scale=Math.min(.72,Math.max(.15,available/1080));
-  previewFrame.style.width=(1080*scale)+'px';previewFrame.style.height=(1350*scale)+'px';
+  previewFrame.style.width=(1080*scale)+'px';previewFrame.style.height=((node.classList.contains('story')?1920:1350)*scale)+'px';
   node.style.setProperty('--preview-scale',scale);
 }
 new ResizeObserver(fitPreview).observe(preview);fitPreview();
@@ -27,8 +27,18 @@ function footBlock(onPhoto){
   const foot=div('t-foot',logo,site);foot.dataset.safeZone='true';return foot;
 }
 function ctaBlock(text,margin){if(!text?.trim())return null;const cta=textElement('span',text);cta.className='t-cta';cta.style.marginTop=margin+'px';return cta;}
-function ridgeRow(ctaText,margin){const row=div('t-ridge-row');row.style.marginTop=margin+'px';row.append(ridge(0));const cta=ctaBlock(ctaText,0);if(cta)row.appendChild(cta);return row;}
+function ridgeRow(ctaText,margin,decoration=true){const row=div('t-ridge-row');row.style.marginTop=margin+'px';if(decoration)row.append(ridge(0));const cta=ctaBlock(ctaText,0);if(cta)row.appendChild(cta);return row;}
 function withClass(el,className,style={}){el.className=className;Object.assign(el.style,style);return el;}
+function isSingleExportWarning(error){return /^visual\.(headline|support|visualCta|price): (máximo|excede el límite)/.test(error);}
+function singleLayoutWarnings(data,element=node,contractWarnings=[]){
+  const warnings=[...contractWarnings,...TikaymiVisual.validateRender(element).errors];
+  if(data.visual?.aspect==='9:16'){
+    const bounds=element.getBoundingClientRect(),top=bounds.top+bounds.height*Number(data.visual?.safeTop??12)/100,bottom=bounds.bottom-bounds.height*Number(data.visual?.safeBottom??18)/100;
+    for(const el of element.querySelectorAll('.t-h1,.t-body,.t-cta,.t-price,.t-logo,.t-site,.t-quote')){const r=el.getBoundingClientRect();if(r.top<top-2||r.bottom>bottom+2)warnings.push(`Story: ${el.className} invade una zona orientativa cubierta por la interfaz`);}
+  }
+  if(['producto','testimonio'].includes(data.tipo)&&Number(data.visual?.overlayStrength??70)<55)warnings.push('Contraste: aumenta el oscurecimiento detrás del texto para revisarlo a tamaño de teléfono');
+  return [...new Set(warnings)];
+}
 // Precio del anuncio: etiqueta con borde lima, solo si una persona lo indicó.
 function priceTag(text,margin,onDark){return text?.trim()?withClass(textElement('span',text.trim()),'t-price'+(onDark?' on-dark':''),{marginTop:margin+'px'}):null;}
 const appendIf=(parent,el)=>{if(el)parent.appendChild(el);};
@@ -41,12 +51,15 @@ function renderTemplate(data,url){
     top.append(head,withClass(div(''),'t-rule',{marginTop:'38px'}),withClass(textElement('h1',v.headline),'t-h1',{marginTop:'44px'}));
     if(v.support)top.appendChild(withClass(textElement('p',v.support),'t-body',{marginTop:'32px'}));
     appendIf(top,priceTag(v.price,32,false));
-    top.appendChild(ridgeRow(v.visualCta,40));
+    top.appendChild(ridgeRow(v.visualCta,40,v.decoration!==false));
     node.append(top,photoBlock(url,lang,'t-editorial-photo'),footBlock(false));
     return;
   }
   node.appendChild(div('t-full',photoBlock(url,lang)));
-  node.appendChild(div('t-overlay'));
+  const overlay=div('t-overlay');
+  const shade=Math.min(100,Math.max(0,Number(v.overlayStrength??70)))/100;
+  overlay.style.background=`linear-gradient(to top,rgba(10,30,29,${(.42+.52*shade).toFixed(2)}) 0%,rgba(10,30,29,${(.12+.62*shade).toFixed(2)}) 48%,rgba(10,30,29,${(.04+.22*shade).toFixed(2)}) 100%)`;
+  node.appendChild(overlay);
   const bottom=div('t-bottom');
   if(data.tipo==='testimonio'){
     bottom.append(withClass(textElement('span',v.headline || label),'t-eyebrow on-dark'),withClass(textElement('div','“'),'t-quote-mark',{marginTop:'40px'}),withClass(textElement('p',v.support),'t-quote'));
@@ -55,7 +68,7 @@ function renderTemplate(data,url){
     bottom.append(withClass(textElement('span',label),'t-eyebrow on-dark'),withClass(textElement('h1',v.headline),'t-h1',{marginTop:'26px',color:'#fff'}));
     if(v.support)bottom.appendChild(withClass(textElement('p',v.support),'t-body on-dark',{marginTop:'32px'}));
     appendIf(bottom,priceTag(v.price,32,true));
-    bottom.appendChild(ridgeRow(v.visualCta,42));
+    bottom.appendChild(ridgeRow(v.visualCta,42,v.decoration!==false));
   }
   if(data.tipo==='testimonio' && v.visualCta?.trim())bottom.appendChild(ctaBlock(v.visualCta,36));
   node.append(bottom,footBlock(true));
@@ -88,8 +101,9 @@ async function loadApprovals(){
   const revoked=assets.filter(x=>x.tipo==='foto' && !x.autorizado_publicar).map(x=>x.url);
   approvedContext={resources:approvedPhotos.map(x=>x.url),allowCloudinary:true,revoked,testimonials:testimonials.map(x=>x.texto),attributions:testimonials.map(x=>x.titulo)};
   const select=document.getElementById('photo');select.replaceChildren(new Option('— Fotografía pendiente —',''));
-  approvedPhotos.forEach(x=>select.add(new Option(x.descripcion || x.destino || x.url,x.url)));
+  approvedPhotos.forEach(x=>select.add(new Option([x.descripcion,x.destino].filter(Boolean).join(' · ') || x.url,x.url)));
   select.value=current?.resource?.url || '';
+  TikaymiSearchableSelect(select,{placeholder:'Busca foto por descripción o destino…'});
 }
 async function show(data, approvals=approvedContext, options={}) {
   if(!data || typeof data!=='object' || Array.isArray(data))throw new Error('El archivo debe contener un objeto con el contrato de imagen única');
@@ -97,13 +111,20 @@ async function show(data, approvals=approvedContext, options={}) {
   const sequence=++renderSequence;
   if(!previewOnly)current=data;
   for(const field of ['headline','support','visualCta','price'])document.getElementById(field).value=data.visual?.[field] || '';
+  document.getElementById('aspect').value=data.visual?.aspect||'4:5';
+  document.getElementById('overlayStrength').value=data.visual?.overlayStrength??70;
+  document.getElementById('decoration').checked=data.visual?.decoration!==false;
+  document.getElementById('safeTop').value=data.visual?.safeTop??12;
+  document.getElementById('safeBottom').value=data.visual?.safeBottom??18;
   document.getElementById('alt').value=data.alt || '';
   document.getElementById('pending-data').value=Array.isArray(data.pending)?data.pending.join('\n'):'';
   document.getElementById('download').disabled=true;
   const validation=TikaymiVisual.validateSingle(data, approvals);
   document.getElementById('photo').value=data.resource?.url || '';
   document.getElementById('photo-url').value=data.resource?.url || '';
-  node.replaceChildren(); node.className='canvas '+data.tipo;
+  node.replaceChildren(); node.className='canvas '+data.tipo+(data.visual?.aspect==='9:16'?' story':'');fitPreview();
+  previewFrame.querySelector('.safe-guide.top').style.height=(data.visual?.aspect==='9:16'?(Number(data.visual?.safeTop??12)/100*previewFrame.clientHeight):0)+'px';
+  previewFrame.querySelector('.safe-guide.bottom').style.height=(data.visual?.aspect==='9:16'?(Number(data.visual?.safeBottom??18)/100*previewFrame.clientHeight):0)+'px';
   const url=data.resource?.url || '';
   if(url){
     // Precarga para detectar URL rota o sin CORS; el lienzo usa background-image como el constructor (html2canvas respeta cover).
@@ -117,21 +138,22 @@ async function show(data, approvals=approvedContext, options={}) {
   showPending([...validation.pending],previewOnly);
   if (document.fonts) await document.fonts.ready;
   if(sequence!==renderSequence)return;
-  const render=TikaymiVisual.validateRender(node);
-  const errors=[...validation.errors,...validation.pending,...render.errors];
+  const renderErrors=TikaymiVisual.validateRender(node).errors,contractWarnings=validation.errors.filter(isSingleExportWarning),warnings=singleLayoutWarnings(data,node,contractWarnings),blockers=[...validation.errors.filter(e=>!isSingleExportWarning(e)),...validation.pending],errors=[...blockers,...warnings];
   statusNode.textContent=previewOnly
     ? 'Vista previa actualizada. Guarda los cambios para validarlos antes de descargar.'+(errors.length?' Pendientes: '+errors.join(' · '):'')
-    : errors.length ? (validation.pending.length && validation.pending.length===errors.length
-        ? `Para descargar, resuelve ${errors.length===1?'el dato pendiente':'los '+errors.length+' datos pendientes'} en «Datos que faltan» (arriba).`
-        : 'No se puede descargar todavía: '+errors.join(' · ')) : 'Composición comprobada. Confirma tu revisión humana para descargar.';
-  document.getElementById('download').disabled=previewOnly || errors.length>0;
+    : blockers.length ? (validation.pending.length && validation.pending.length===blockers.length
+        ? `Para descargar, resuelve ${blockers.length===1?'el dato pendiente':'los '+blockers.length+' datos pendientes'} en «Datos que faltan» (arriba).`
+        : 'No se puede descargar todavía: '+blockers.join(' · ')) : warnings.length
+          ? 'Hay advertencias de composición. Puedes descargar si las revisaste y aceptas el resultado.'
+          : 'Composición comprobada. Confirma tu revisión humana para descargar.';
+  document.getElementById('download').disabled=previewOnly || blockers.length>0;
   if(generatedId && !previewOnly) {
     const res=await fetch('/api/generated/'+generatedId+'/render-validation',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({contenido:originalContent,errors})});
     if(!res.ok){document.getElementById('download').disabled=true;statusNode.textContent=(await res.json()).error;}
     const key='visual-repair-'+generatedId;
-    if(render.errors.length && !visualRepairUsed && !sessionStorage.getItem(key)) {
+    if(renderErrors.length && !visualRepairUsed && !sessionStorage.getItem(key)) {
       sessionStorage.setItem(key,'1');statusNode.textContent='El texto no cabe. Intentando una versión más breve una vez…';
-      const repaired=await fetch('/api/generated/'+generatedId+'/regenerate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({segmento:'pieza',automatic_visual_repair:true,instruccion:'Acorta exclusivamente los textos que no caben. Conserva fotografía, mensaje, idioma y CTA. Errores: '+render.errors.join('; ')})});
+      const repaired=await fetch('/api/generated/'+generatedId+'/regenerate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({segmento:'pieza',automatic_visual_repair:true,instruccion:'Acorta exclusivamente los textos que no caben. Conserva fotografía, mensaje, idioma y CTA. Errores: '+renderErrors.join('; ')})});
       if(repaired.ok){location.reload();return;}statusNode.textContent='Revisión fallida: '+(await repaired.json()).error;
     }
   }
@@ -140,7 +162,7 @@ async function show(data, approvals=approvedContext, options={}) {
 }
 document.getElementById('file').onchange=async e=>{ try { generatedId=null; await loadApprovals(); await show(JSON.parse(await e.target.files[0].text())); } catch(err){document.getElementById('download').disabled=true;statusNode.textContent=err.message;} };
 // El precio vacío se omite: la imagen no muestra etiqueta.
-function visualFromInputs(){const v=Object.fromEntries(['headline','support','visualCta','price'].map(field=>[field,document.getElementById(field).value.trim()]));if(!v.price)delete v.price;return v;}
+function visualFromInputs(){const v=Object.fromEntries(['headline','support','visualCta','price'].map(field=>[field,document.getElementById(field).value.trim()]));if(!v.price)delete v.price;v.aspect=document.getElementById('aspect').value;v.overlayStrength=Number(document.getElementById('overlayStrength').value);v.decoration=document.getElementById('decoration').checked;v.safeTop=Number(document.getElementById('safeTop').value);v.safeBottom=Number(document.getElementById('safeBottom').value);return v;}
 let previewTimer;
 function updateLivePreview(){
   clearTimeout(previewTimer);document.getElementById('download').disabled=true;
@@ -156,7 +178,7 @@ function updateLivePreview(){
     show(draft,approvedContext,{previewOnly:true}).catch(err=>{statusNode.textContent='No se pudo actualizar la vista previa: '+err.message;});
   },450);
 }
-for(const field of ['photo-url','headline','support','visualCta','price','alt','pending-data'])document.getElementById(field).addEventListener('input',updateLivePreview);
+for(const field of ['photo-url','headline','support','visualCta','price','alt','pending-data','aspect','overlayStrength','decoration','safeTop','safeBottom'])document.getElementById(field).addEventListener('input',updateLivePreview);
 document.getElementById('photo').addEventListener('change',e=>{document.getElementById('photo-url').value=e.target.value;updateLivePreview();});
 document.getElementById('save-photo').onclick=()=>savePiece('Corrección humana de foto, texto o pendientes en revisión visual');
 async function savePiece(motivo){
@@ -183,13 +205,18 @@ document.getElementById('download').onclick=async()=>{
   try {
     await loadApprovals();
     const contract=TikaymiVisual.validateSingle(current,approvedContext);
-    if(!contract.ready)throw new Error([...contract.errors,...contract.pending].join(' · '));
-    const result=TikaymiVisual.validateRender(node);
-    if(!result.ok || !current.resource?.url) throw new Error(result.errors.join(' · ') || 'Falta fotografía');
-    if(!confirm('¿Confirmas que revisaste la fotografía, textos, CTA e idioma?')) return;
+    const contractWarnings=contract.errors.filter(isSingleExportWarning);
+    const blockers=[...contract.errors.filter(e=>!isSingleExportWarning(e)),...contract.pending];
+    if(blockers.length)throw new Error('Resuelve estos bloqueos antes de exportar: '+blockers.join(' · '));
+    if(!current.resource?.url)throw new Error('Falta fotografía. Elige una imagen válida antes de exportar.');
+    const warnings=singleLayoutWarnings(current,node,contractWarnings);
+    if(warnings.length){
+      if(!confirm('La imagen tiene advertencias de composición. Puedes exportarla de todos modos, pero el PNG conservará estos problemas:\n\n'+warnings.join('\n')+'\n\nSi continúas, confirmas que revisaste la fotografía, los textos, el CTA y el idioma. ¿Exportar de todos modos?'))return;
+    } else if(!confirm('¿Confirmas que revisaste la fotografía, textos, CTA e idioma?')) return;
     const oldTransform=node.style.transform;node.style.transform='none';
-    let canvas;try{canvas=await html2canvas(node,{useCORS:true,allowTaint:false,scale:1,width:1080,height:1350});}finally{node.style.transform=oldTransform;}
-    canvas.toBlob(blob=>{ if(!blob){statusNode.textContent='No se pudo crear el PNG.';return;} const a=document.createElement('a'); a.download='tikaymi-imagen-unica.png'; a.href=URL.createObjectURL(blob); a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); });
+    const height=current.visual?.aspect==='9:16'?1920:1350;
+    let canvas;try{canvas=await html2canvas(node,{useCORS:true,allowTaint:false,scale:1,width:1080,height});}finally{node.style.transform=oldTransform;}
+    canvas.toBlob(blob=>{ if(!blob){statusNode.textContent='No se pudo crear el PNG.';return;} const a=document.createElement('a'); a.download=`tikaymi-imagen-unica-${height===1920?'9x16':'4x5'}.png`; a.href=URL.createObjectURL(blob); a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); });
   } catch(err){statusNode.textContent=err.message;}
 };
 (async()=>{const id=new URLSearchParams(location.search).get('id'); if(!id)return; try {await loadApprovals();const res=await fetch('/api/generated'); if(!res.ok)throw new Error('Inicia sesión en Tikaymi Lab'); const item=(await res.json()).find(x=>String(x.id)===id); if(!item)throw new Error('Borrador inexistente'); generatedId=id; originalContent=item.contenido; visualRepairUsed=!!item.visual_repair_used; await show(JSON.parse(item.contenido));}catch(err){statusNode.textContent=err.message;}})();

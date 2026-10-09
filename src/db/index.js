@@ -23,6 +23,24 @@ CREATE TABLE IF NOT EXISTS leads(
   id INTEGER PRIMARY KEY, post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL, campaign_code TEXT,
   fuente TEXT, estado TEXT NOT NULL DEFAULT 'nuevo', fecha_viaje TEXT, viajeros INTEGER, notas TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS ad_campaigns(
+  id INTEGER PRIMARY KEY, generated_id INTEGER NOT NULL REFERENCES generated(id) ON DELETE CASCADE,
+  package_id INTEGER REFERENCES content_packages(id) ON DELETE SET NULL,
+  country TEXT, status TEXT NOT NULL DEFAULT 'contenido_revision', brief_json TEXT NOT NULL DEFAULT '{}',
+  launch_snapshot_json TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, launched_at TEXT);
+CREATE TABLE IF NOT EXISTS ad_variants(
+  id INTEGER PRIMARY KEY, campaign_id INTEGER NOT NULL REFERENCES ad_campaigns(id) ON DELETE CASCADE,
+  generated_id INTEGER NOT NULL REFERENCES generated(id) ON DELETE CASCADE,
+  package_id INTEGER REFERENCES content_packages(id) ON DELETE SET NULL,
+  letter TEXT NOT NULL, code TEXT NOT NULL UNIQUE, product_url TEXT, language TEXT NOT NULL, country TEXT,
+  external_campaign_id TEXT, external_adset_id TEXT, external_ad_id TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(campaign_id,letter));
+CREATE TABLE IF NOT EXISTS paid_metrics(
+  id INTEGER PRIMARY KEY, variant_id INTEGER NOT NULL REFERENCES ad_variants(id) ON DELETE CASCADE,
+  period_start TEXT NOT NULL, period_end TEXT NOT NULL, spend REAL, currency TEXT,
+  impressions INTEGER, reach INTEGER, clicks INTEGER, click_definition TEXT,
+  conversations INTEGER, conversation_definition TEXT, source TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(variant_id,period_start,period_end));
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS learnings(
   id INTEGER PRIMARY KEY, fecha TEXT DEFAULT CURRENT_TIMESTAMP, texto TEXT NOT NULL, post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL);
@@ -159,6 +177,12 @@ function migrate(db) {
   if (!siteCols.includes('active')) db.exec('ALTER TABLE site_pages ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
   const syncCols = db.prepare('PRAGMA table_info(site_syncs)').all().map(c => c.name);
   if (!syncCols.includes('removed')) db.exec('ALTER TABLE site_syncs ADD COLUMN removed INTEGER NOT NULL DEFAULT 0');
+  const leadCols = db.prepare('PRAGMA table_info(leads)').all().map(c => c.name);
+  if (!leadCols.includes('ad_variant_id')) db.exec('ALTER TABLE leads ADD COLUMN ad_variant_id INTEGER REFERENCES ad_variants(id) ON DELETE SET NULL');
+  if (!leadCols.includes('country_residence')) db.exec('ALTER TABLE leads ADD COLUMN country_residence TEXT');
+  if (!leadCols.includes('acquired_at')) db.exec('ALTER TABLE leads ADD COLUMN acquired_at TEXT');
+  const campaignCols=db.prepare('PRAGMA table_info(ad_campaigns)').all().map(c=>c.name);
+  if(!campaignCols.includes('launch_snapshot_json'))db.exec('ALTER TABLE ad_campaigns ADD COLUMN launch_snapshot_json TEXT');
 }
 
 function open(file) {
@@ -167,6 +191,7 @@ function open(file) {
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
   migrate(db);
+  require('../modules/paid').backfill(db);
   return db;
 }
 

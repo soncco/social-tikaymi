@@ -1110,15 +1110,24 @@ function fileName(i){
   return 'tikaymi-'+state.tipo+'-slide-'+String(i+1).padStart(2,'0')+'.'+ext;
 }
 
-async function downloadSlide(i){
+function isCarouselExportWarning(error){return /: máximo \d+ palabras y \d+ caracteres de texto$|: máximo \d+ elementos$/.test(error);}
+
+async function inspectSlideForExport(i){
   const node = document.getElementById('export-slide-'+i);
   if(document.fonts) await document.fonts.ready;
   const contentCheck = TikaymiVisual.validateCarousel({slides:[state.slides[i]]});
   const renderCheck = TikaymiVisual.validateRender(node);
-  const errors = [...contentCheck.errors, ...renderCheck.errors];
-  errors.push(...await checkImages(node));
-  if(node.querySelector('.ph')) errors.push('Fotografía pendiente: reemplaza el marcador antes de exportar.');
-  if(errors.length){ alert('Revisión fallida. Acorta o corrige el contenido y vuelve a revisar:\n'+errors.join('\n')); return; }
+  const warnings = [...contentCheck.errors.filter(isCarouselExportWarning), ...renderCheck.errors];
+  const blockers = [...contentCheck.errors.filter(error=>!isCarouselExportWarning(error)), ...await checkImages(node)];
+  if(node.querySelector('.ph')) blockers.push('Fotografía pendiente: reemplaza el marcador antes de exportar.');
+  return {node,blockers,warnings};
+}
+
+async function downloadSlide(i,{review=null,acceptWarnings=false}={}){
+  review ||= await inspectSlideForExport(i);
+  if(review.blockers.length){ alert('No se puede exportar esta diapositiva todavía:\n'+review.blockers.join('\n')); return false; }
+  if(review.warnings.length&&!acceptWarnings&&!confirm('La diapositiva tiene advertencias visuales. Puedes exportarla de todos modos, pero el PNG conservará estos problemas:\n\n'+review.warnings.join('\n')+'\n\n¿Exportar de todos modos?'))return false;
+  const {node}=review;
   const canvas = await html2canvas(node, {backgroundColor:'#ffffff', useCORS:true, allowTaint:false, imageTimeout:0, scale:1, width:1080, height:1350, windowWidth:1080, windowHeight:1350});
   const format = document.getElementById('export-format').value;
   const mime = format==='jpeg' ? 'image/jpeg' : 'image/png';
@@ -1136,11 +1145,18 @@ async function downloadSlide(i){
       resolve();
     }, mime, quality);
   });
+  return true;
 }
 
 async function downloadAll(){
+  const reviews=[];
+  for(let i=0;i<state.slides.length;i++)reviews.push(await inspectSlideForExport(i));
+  const blockers=reviews.flatMap((r,i)=>r.blockers.map(e=>`Diapositiva ${i+1}: ${e}`));
+  if(blockers.length){alert('No se puede exportar el carrusel todavía:\n'+blockers.join('\n'));return;}
+  const warnings=reviews.flatMap((r,i)=>r.warnings.map(e=>`Diapositiva ${i+1}: ${e}`));
+  if(warnings.length&&!confirm('El carrusel tiene advertencias visuales. Puedes exportarlo de todos modos, pero los PNG conservarán estos problemas:\n\n'+warnings.join('\n')+'\n\n¿Descargar todas de todos modos?'))return;
   for(let i=0; i<state.slides.length; i++){
-    await downloadSlide(i);
+    await downloadSlide(i,{review:reviews[i],acceptWarnings:true});
     await new Promise(r=>setTimeout(r, 350));
   }
 }

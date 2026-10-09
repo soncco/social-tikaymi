@@ -53,7 +53,7 @@ Node.js 20, Express 5, better-sqlite3, cookie firmada y frontend HTML/CSS/JS van
 - `src/modules/sync.js` e `importer.js`: entrada de publicaciones y métricas.
 - `src/modules/analysis.js`: confianza, rankings y recomendaciones.
 - `src/modules/content.js` y `llm.js`: generación restringida a información aprobada.
-- `src/modules/attribution.js`: UTM, WhatsApp y códigos.
+- `src/modules/attribution.js`: UTM y enlaces orgánicos; `leads.js` resuelve códigos orgánicos y publicitarios. `ads.js` valida textos y perfiles de interfaz; `paid.js` prepara campañas y mide resultados pagados manuales/CSV.
 - `src/modules/abtests.js`, `alerts.js`, `cohorts.js`, `digest.js`: análisis complementario.
 - `src/modules/planner.js`: propuesta semanal/mensual por señales de una plataforma a la vez; refinamiento opcional con IA y validación del JSON.
 - `src/modules/site.js`: sincronización manual y limitada del sitemap y páginas públicas de Tikaymi.com; copia local con hash, idioma, origen y aprobación editorial.
@@ -66,6 +66,7 @@ Node.js 20, Express 5, better-sqlite3, cookie firmada y frontend HTML/CSS/JS van
 - `posts`: publicación, contexto de marketing y estado editorial.
 - `metrics`: snapshot normalizado; `NULL` significa dato no disponible, nunca cero.
 - `leads`: consulta y avance comercial; `post_id` permite atribución.
+- `ad_campaigns`, `ad_variants` y `paid_metrics`: brief y estados de campaña, códigos únicos por variante y resultados pagados por período. `leads.ad_variant_id` vincula una consulta a un anuncio sin post orgánico; país de residencia declarado y fecha de adquisición no se infieren de Meta.
 - `approved_info` y `assets`: fuente de verdad para generación.
 - `generated`: contenido generado; siempre nace en revisión.
 - `learnings` y `ab_tests`: conocimiento acumulado y experimentos.

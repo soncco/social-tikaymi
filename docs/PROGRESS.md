@@ -1,6 +1,6 @@
 # Estado actual — Tikaymi Marketing Intelligence
 
-Última actualización: 2026-10-05.
+Última actualización: 2026-10-09.
 
 ## Estado general
 
@@ -10,6 +10,16 @@ La base real contiene 50 publicaciones de Meta con métricas: 25 de Instagram y 
 
 ## Implementado
 
+### Publicidad Meta: preparación y medición manual (2026-10-09)
+
+- `src/modules/ads.js`: perfiles diferenciados para Business Suite simplificado (título 25, saludo 300, mensaje predefinido 80 según pantalla comunicada por Tikaymi) y Ads Manager (40 de título como aviso editorial heredado, sin afirmar límite universal). La salida final se valida tras añadir códigos, saludo y mensaje. Se acorta el nombre del producto sin perder el código. El objetivo de cotización ajusta el CTA visual de piezas nuevas. Edición, regeneración y aprobación vuelven a validar; se conservan códigos asignados.
+- Precio nuevo estructurado con importe, moneda, modalidad, unidad, condiciones, vigencia opcional y confirmación; `precio` antiguo en texto sigue legible y puede convertirse con confirmación humana desde Publicidad. La conversión versiona y devuelve visual y textos a revisión. Se dejaron pendientes de costos que no son solo el precio base. No se infiere que una cifra aislada de una fuente corresponda al tour. La preparación comprueba tour y precio visual coherente y exige revisión humana de afirmaciones.
+- `ad_campaigns`/`ad_variants` guardan campaña y código único por variante, vinculados al paquete y anuncio. `open()` migra anuncios anteriores de forma idempotente. `POST /leads` atribuye códigos publicitarios sin necesitar `posts`, separa orgánico/publicidad/desconocido y permite país de residencia declarado y fecha de adquisición. El historial de estados sigue intacto.
+- `paid_metrics` registra gasto y métricas pagadas por variante/período. Hay entrada manual y CSV con mapeo y vista previa; los períodos superpuestos se rechazan. Resultados distinguen conversaciones Meta de consultas de Tikaymi, cero de dato ausente, monedas y denominadores. Alcance de varios períodos no se suma como personas únicas. La consulta adquirida durante campaña puede avanzar a reserva después del fin.
+- **Contenido → Publicidad** reúne brief, país, público, presupuesto, fechas, WhatsApp, configuración propuesta, guía de copia, exportación JSON, lanzamiento manual y resultados. Duplicar por país genera códigos nuevos. No existe integración de lectura de Ads Manager ni lanzamiento automático.
+- Editor de imagen única: composición 4:5 y 9:16, oscurecimiento, silueta opcional y guías orientativas de interfaz. El logo original se conserva. El contraste se comprueba de forma conservadora según oscurecimiento, además de la revisión geométrica y humana.
+- Ver [META_ADVERTISING.md](META_ADVERTISING.md). Las pruebas directas de módulos usan base en memoria; la verificación final de navegador y proveedor real está pendiente.
+
 ### Anuncio Meta desde un tour (2026-10-06)
 
 - Nuevo tipo `anuncio_meta` (`src/modules/ads.js`) y formato **Anuncio Meta** en Crear con IA: `generatePackage({ extra:'anuncio_meta', ad_visual:'imagen_unica'|'carrusel' })` genera la pieza visual y, derivados de ella, 2–3 textos de anuncio. No se generan copies orgánicos. Plataforma del visual: Instagram o Facebook (TikTok/Shorts se sustituyen por Instagram); la fila del anuncio guarda `plataforma=NULL` y el JSON declara `ubicaciones: facebook + instagram`.
@@ -18,7 +28,7 @@ La base real contiene 50 publicaciones de Meta con métricas: 25 de Instagram y 
 - Validación determinista: límites, variantes con ganchos distintos, sin «barato/low cost/cheap/mejor precio», sin urgencia, hashtags ni URL en el texto, y toda cifra con moneda debe aparecer en las fuentes aprobadas (comparación de dígitos: es una heurística, no prueba que el precio siga vigente). Una corrección automática; luego `failed_visual_reviews`. La aprobación bloquea `[FALTA DATO]` en los textos.
 - Regenerar un anuncio conserva `codigo_base` para no romper la atribución de leads ya registrados.
 - UI: selector de tours aprobados en el brief, vista legible por variante con contador y **Copiar** por campo, edición del JSON con **Editar texto** y filtro por tipo.
-- Pendiente: medidas 9:16 para Stories/Reels (la imagen única exporta 1080 × 1350), separar resultados pagados de orgánicos al importar métricas de anuncios, y lectura de Ads Manager.
+- La imagen única ahora ofrece 9:16 y el registro pagado está separado de las métricas orgánicas. La lectura de Ads Manager sigue pendiente.
 - Verificación: `npm test` 130/130 (`test/ads.test.js` con proveedor ficticio). No se probó con el proveedor de IA real ni se revisó la pantalla en navegador.
 
 ### Fotos desde Cloudinary sin cargar Biblioteca (2026-10-06)

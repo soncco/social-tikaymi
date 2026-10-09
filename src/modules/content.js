@@ -9,6 +9,7 @@ const editorialStrategy = require('./editorial-strategy');
 const visualContract = require('../../public/visual-contract');
 const visualReview = require('./visual-review');
 const ads = require('./ads');
+const paid = require('./paid');
 
 const err = (status, message) => Object.assign(new Error(message), { status });
 
@@ -61,7 +62,7 @@ const CARRUSEL_LAYOUT_GUIDE = [
   'producto: itinerario={eyebrow,h2,imageUrl,caption,note,route:[{d,t}]}; route debe tener un objeto por día o etapa (puede tener varios, no lo resumas en un solo texto).',
   'producto: foto-sangre={eyebrow,h2,body,imageUrl,note}; split|foto-arriba|foto-abajo={eyebrow,h2,body,imageUrl,caption,note}; elige según quieras dividir foto/texto, foto arriba o foto abajo.',
   'producto: galeria={eyebrow,h2,photos:[{imageUrl,tag,note}]} con 2 o 3 fotos; cita={quote,by,imageUrl,note} solo con testimonio real aprobado; antes-despues={eyebrow,h2,beforeUrl,afterUrl,beforeTag,afterTag,beforeNote,afterNote,body} solo si existe un antes/después real.',
-  'producto: incluido={eyebrow,h2,items:[string]}; bueno-saberlo={eyebrow,h2,notes:[{title,text}],body}; cierre={eyebrow,h2,body,ctaText,ctaUrl,contact}. El cierre debe ser la última diapositiva.',
+  'producto: incluido={eyebrow,h2,items:[string]}; bueno-saberlo={eyebrow,h2,notes:[{title,text}],body}; cierre={eyebrow,h2,body,ctaText,ctaUrl,contact}. En incluido, cada item es una frase nominal corta (ideal 2–8 palabras; máximo absoluto 12 palabras y 192 caracteres), una inclusión confirmada sin explicación ni oración larga. Usa hasta 5 elementos distintos. El cierre debe ser la última diapositiva.',
   'informativo: portada, portada-foto y portada-editorial usan los mismos campos de portada; cifras={eyebrow,h2,facts:[{v,k}]} solo con cifras aprobadas; pasos={eyebrow,h2,steps:[{title,text}]} con un objeto por paso.',
   'informativo: columnas={eyebrow,h2,colA:{heading,items:[string]},colB:{heading,items:[string]}} para sí/no; foto-overlay={eyebrow,h2,body,imageUrl,note}; qa-panel={eyebrow,qas:[{q,a}],panelLabel,panelText} para preguntas y recomendación; cierre usa el esquema de producto.',
 ];
@@ -218,6 +219,36 @@ function validateCarouselStrict(json) {
   return { ok: !errors.length, errors };
 }
 
+function carouselRepairInstructions(errors, originalSlideCount) {
+  return errors.map(error => {
+    const included = error.match(/diapositiva (\d+) \(incluido\)\.items\[(\d+)\]: máximo 12 palabras y 192 caracteres de texto/);
+    if (included) return `Diapositiva ${included[1]} (incluido), elemento ${Number(included[2]) + 1}: reescríbelo como una frase nominal breve, idealmente de 2–8 palabras (máximo 12 palabras y 192 caracteres). Conserva solo una inclusión respaldada; elimina explicaciones largas o repetidas, sin cortar palabras ni inventar datos.`;
+    const ficha = error.match(/diapositiva (\d+) \(ficha\)\.meta\[(\d+)\]\.v: máximo (\d+) palabras y (\d+) caracteres de texto/);
+    if (ficha) return `Diapositiva ${ficha[1]} (ficha), dato ${Number(ficha[2]) + 1}, valor v: resúmelo como un dato breve con su unidad (máximo ${ficha[3]} palabras y ${ficha[4]} caracteres). Elimina contexto y explicación; conserva el dato aprobado.`;
+    const note = error.match(/diapositiva (\d+) \(bueno-saberlo\)\.notes\[(\d+)\]\.text: máximo (\d+) palabras y (\d+) caracteres de texto/);
+    if (note) return `Diapositiva ${note[1]} (bueno-saberlo), nota ${Number(note[2]) + 1}, texto: expresa una sola recomendación o dato en una frase breve (máximo ${note[3]} palabras y ${note[4]} caracteres). Quita contexto secundario; no añadas hechos.`;
+    if (/^slides: las nuevas generaciones requieren entre 3 y 5 diapositivas/.test(error)) {
+      return originalSlideCount >= 3 && originalSlideCount <= 5
+        ? `Conserva las ${originalSlideCount} diapositivas completas de la respuesta original. La versión corregida debe contener también entre 3 y 5; no elimines diapositivas para acortar texto.`
+        : 'La pieza completa debe tener entre 3 y 5 diapositivas; incluye todas las necesarias y deja cierre con CTA como última. No devuelvas solo las diapositivas editadas.';
+    }
+    return error;
+  });
+}
+
+function carouselErrorSummary(errors) {
+  return errors.map(error => {
+    const included = error.match(/diapositiva (\d+) \(incluido\)\.items\[(\d+)\]: máximo 12 palabras y 192 caracteres de texto/);
+    if (included) return `diapositiva ${included[1]} (Incluido), elemento ${Number(included[2]) + 1}: supera el máximo de 12 palabras (192 caracteres)`;
+    const ficha = error.match(/diapositiva (\d+) \(ficha\)\.meta\[(\d+)\]\.v: máximo (\d+) palabras y (\d+) caracteres de texto/);
+    if (ficha) return `diapositiva ${ficha[1]} (Ficha), dato ${Number(ficha[2]) + 1}: el valor supera ${ficha[3]} palabras (${ficha[4]} caracteres)`;
+    const note = error.match(/diapositiva (\d+) \(bueno-saberlo\)\.notes\[(\d+)\]\.text: máximo (\d+) palabras y (\d+) caracteres de texto/);
+    if (note) return `diapositiva ${note[1]} (Bueno saberlo), nota ${Number(note[2]) + 1}: el texto supera ${note[3]} palabras (${note[4]} caracteres)`;
+    if (/^slides: las nuevas generaciones requieren entre 3 y 5 diapositivas/.test(error)) return 'el carrusel debe tener entre 3 y 5 diapositivas';
+    return error;
+  });
+}
+
 function validateCarouselResources(json, resources, testimonials, {ready=false}={}) {
   const errors=[], allowed=new Set(resources.map(x=>x.url));
   const slides=Array.isArray(json?.slides)?json.slides:[];
@@ -298,7 +329,7 @@ const packageBrief = post => ({
   source_url: post.source_url || null, precio: post.precio || null,
 });
 
-async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, strict = false, repair_feedback, analysis_filters, platform_override, ad_base, precio } = {}, { fetchImpl, save = true, package_id = null, repair = true } = {}) {
+async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, strict = false, repair_feedback, analysis_filters, platform_override, ad_base, precio, ad_profile } = {}, { fetchImpl, save = true, package_id = null, repair = true } = {}) {
   if (['imagen_unica','carrusel'].includes(tipo)) strict = true;
   if (!C.CONTENIDO_TIPOS.includes(tipo)) throw err(400, `tipo inválido: ${tipo}. Válidos: ${C.CONTENIDO_TIPOS.join(', ')}`);
   const idea = plan_idea_id ? db.prepare('SELECT i.*,p.filtros_json FROM plan_ideas i JOIN editorial_plans p ON p.id=i.plan_id WHERE i.id=?').get(plan_idea_id) : null;
@@ -325,9 +356,11 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source
   const partes = buildPrompt(db, { post, tipo, idioma: lang, sourceContent: source_content, videoConfig: video_config, repairFeedback: repair_feedback, analysisFilters: filtros });
   // Precio de anuncio: lo escribió una persona; el servidor lo coloca en el diseño y la IA solo puede citarlo literal.
   const price = ['imagen_unica', 'carrusel', 'anuncio_meta'].includes(tipo) ? ads.normalizePrice(precio) : null;
+  const priceLabel = ads.priceText(price, lang);
   if (price) partes.prompt += tipo === 'anuncio_meta'
-    ? `\nPrecio confirmado por Tikaymi para esta pieza: «${price}». Puedes citarlo literal en una variante como máximo; no lo modifiques, no lo conviertas ni lo presentes como oferta. No lo anotes en "pending".`
-    : `\nPrecio confirmado por Tikaymi: «${price}». No lo escribas en los textos: el sistema lo coloca en el diseño.${tipo === 'carrusel' ? ' Usa tipo "producto" e incluye una lámina "ficha" con meta [{k,v}] (duración, servicio…); el sistema añade la fila de precio.' : ''} No lo anotes en "pending".`;
+    ? `\nPrecio confirmado por Tikaymi para esta pieza: «${priceLabel}». Puedes citarlo literal en una variante como máximo; no lo modifiques, no lo conviertas ni lo presentes como oferta. No lo anotes en "pending".`
+    : `\nPrecio confirmado por Tikaymi: «${priceLabel}». No lo escribas en los textos: el sistema lo coloca en el diseño.${tipo === 'carrusel' ? ' Usa tipo "producto" e incluye una lámina "ficha" con meta [{k,v}] (duración, servicio…); el sistema añade la fila de precio.' : ''} No lo anotes en "pending".`;
+  if (tipo === 'anuncio_meta') partes.prompt += `\nPerfil de interfaz: ${ad_profile || 'business_suite'}. Objetivo comercial: ${post.objetivo_negocio}. El título no puede superar ${ad_profile === 'ads_manager' ? '40 caracteres recomendados' : '25 caracteres obligatorios'}.`;
   if (tipo === 'copy') partes.prompt += `\nPlataforma única de esta salida: ${post.plataforma}. ${({ instagram:'Gancho breve, párrafos cortos y CTA contextual. Termina con una línea de 4–6 hashtags pertinentes (destino, tipo de viaje, Perú).', facebook:'Contexto útil, tono conversacional y enlace/CTA cuando esté aprobado. Termina con una línea de 2–3 hashtags.', tiktok:'Descripción concisa conectada al video. Termina con una línea de 3–5 hashtags pertinentes.', youtube_shorts:'Descripción breve y contexto del Short; evita referencias a otras redes. Termina con 2–3 hashtags, incluido #Shorts.' })[post.plataforma]}`;
 
   // (c) Llamada a la API de Anthropic.
@@ -354,22 +387,30 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source
       throw err(502, `Imagen única inválida: ${validation.errors.join('; ')}. Guardada como revisión fallida.`);
     }
     json.plataforma = post.plataforma; json.idioma = lang;
-    if (price) json.visual.price = price; else delete json.visual.price;
+    if (price) json.visual.price = priceLabel; else delete json.visual.price;
+    if (post.objetivo_negocio === 'cotizacion') {
+      json.visual.visualCta = lang === 'en' ? 'Request a quote' : 'Solicita una cotización';
+      json.cta.text = json.visual.visualCta;
+    }
     json.pending = ads.withoutPricePending([...new Set(validation.pending)], price);
     contenido = JSON.stringify(json, null, 2);
   } else if (tipo === 'anuncio_meta') {
     let json;
     try { json = JSON.parse(quitarCercas(texto)); } catch { json=null; }
     const context = selectContext(db, post);
-    const validation = ads.validate(json, { idioma:lang, sourcesText:`${sourcesText(context)}\n${price || ''}` });
-    if (!validation.ok && repair && !repair_feedback) return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, analysis_filters, platform_override, ad_base, precio, repair_feedback:`${validation.errors.join('; ')}\nRespuesta fallida: ${texto}` }, { fetchImpl, save, package_id, repair:false });
+    json.precio = price;
+    const validation = ads.validate(json, { idioma:lang, sourcesText:sourcesText(context), profile:ad_profile, objective:post.objetivo_negocio });
+    if (!validation.ok && repair && !repair_feedback) return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, analysis_filters, platform_override, ad_base, precio, ad_profile, repair_feedback:`${validation.errors.join('; ')}\nRespuesta fallida: ${texto}` }, { fetchImpl, save, package_id, repair:false });
     if (!validation.ok) {
       db.prepare('INSERT INTO failed_visual_reviews(tipo,contenido,errors_json) VALUES(?,?,?)').run(tipo,texto,JSON.stringify(validation.errors));
       throw err(502, `Anuncio inválido: ${validation.errors.join('; ')}. Guardado como revisión fallida.`);
     }
     const strategy = editorialStrategy.get(db);
     json.warnings = [...(Array.isArray(json.warnings) ? json.warnings : []), ...validation.warnings];
-    contenido = JSON.stringify(ads.finalize(json, { base:ad_base || ads.nextBase(db, lang), tour:adTour(db, post, context, lang), contactName:strategy.contact_name, precio:price }), null, 2);
+    const finished = ads.finalize(json, { base:ad_base || ads.nextBase(db, lang), tour:adTour(db, post, context, lang), contactName:strategy.contact_name, precio:price, profile:ad_profile, objective:post.objetivo_negocio });
+    const finalValidation = ads.validate(finished, { idioma:lang, ready:true, objective:post.objetivo_negocio });
+    if (!finalValidation.ok) throw err(422, `Anuncio final inválido: ${finalValidation.errors.join('; ')}`);
+    contenido = JSON.stringify(finished, null, 2);
     copyPending = JSON.parse(contenido).pending;
   } else if (tipo === 'carrusel') {
     let json;
@@ -380,16 +421,20 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source
       validation.errors.push(...validateCarouselResources(json,context.resources.filter(x=>x.tipo==='foto'),context.info.filter(x=>x.tipo==='testimonio')));
       validation.ok = !validation.errors.length;
       if (!validation.ok && repair && !repair_feedback) {
+        const originalSlideCount=Array.isArray(json?.slides)?json.slides.length:null;
+        const failedResponse=String(texto);
+        const repairSource=failedResponse.length<=16000?failedResponse:`${failedResponse.slice(0,8000)}\n[…respuesta intermedia omitida para limitar el contexto…]\n${failedResponse.slice(-8000)}`;
         return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, analysis_filters, platform_override, strict, precio,
-          repair_feedback: `Errores: ${validation.errors.join('; ')}\nRespuesta fallida:\n${String(texto).slice(0, 6000)}` }, { fetchImpl, save, package_id, repair:false });
+          repair_feedback: `Corrige la respuesta y devuelve el JSON completo del carrusel, nunca fragmentos.\n${carouselRepairInstructions(validation.errors,originalSlideCount).join('\n')}\nConserva layouts, etiquetas y hechos aprobados. Cambia solo los valores que exceden límites. Comprueba que el resultado final tenga entre 3 y 5 diapositivas y cierre con CTA al final.\nRespuesta fallida:\n${repairSource}` }, { fetchImpl, save, package_id, repair:false });
       }
       if (!validation.ok) {
         db.prepare('INSERT INTO failed_visual_reviews(tipo,contenido,errors_json) VALUES(?,?,?)').run(tipo,texto,JSON.stringify(validation.errors));
-        throw err(502, `Carrusel incompleto: ${validation.errors.join('; ')}. Guardado como revisión fallida; no se guardó el paquete.`);
+        const repairStatus = repair_feedback ? 'La corrección automática no logró ajustarlo' : 'No se pudo corregir automáticamente';
+        throw err(502, `Carrusel incompleto: ${carouselErrorSummary(validation.errors).join('; ')}. ${repairStatus}; no se guardó el paquete.`);
       }
     }
     const exported = carouselExport(json, lang); // valida tipo, layouts y compatibilidad
-    if (price) copyPending = carouselPrice(exported, price, lang);
+    if (price) copyPending = carouselPrice(exported, priceLabel, lang);
     contenido = JSON.stringify(exported, null, 2);
   } else if (tipo === 'copy') {
     const split = splitCopyPending(sanitizeCopy(contenido));
@@ -480,6 +525,9 @@ async function generatePackage(db, input = {}, deps = {}) {
   const adPlatform = isAd ? (['instagram', 'facebook'].includes(post.plataforma) ? post.plataforma : 'instagram') : null;
   if (isAd) { post.plataforma = adPlatform; post.plataformas_destino = ['facebook', 'instagram']; }
   const precio = isAd ? ads.normalizePrice(input.precio) : null;
+  if (precio && typeof precio === 'object' && !precio.product_url && post.source_url) precio.product_url = post.source_url;
+  if (precio && typeof precio === 'object' && (!post.source_url || precio.product_url !== post.source_url || !db.prepare("SELECT 1 FROM site_pages WHERE url=? AND kind='tour' AND approved=1 AND active=1").get(post.source_url)))
+    throw err(422,'Para mostrar un precio, elige el tour aprobado al que corresponde y confirma su unidad y condiciones.');
   if (precio) post.precio = precio;
   if(extra)post.formato=['guion','prompt_flow'].includes(extra)?'reel':isAd?adVisual:extra;
   const lang = input.idioma || post.idioma;
@@ -495,7 +543,13 @@ async function generatePackage(db, input = {}, deps = {}) {
     additional = await generate(db, { ...input, idioma:lang, tipo:'prompt_flow', strict:true, analysis_filters, source_content:primary.contenido, video_config:videoConfig }, { ...deps, save:false });
   } else if (isAd) {
     primary = await generate(db, { ...input, idioma:lang, tipo:adVisual, strict:true, analysis_filters, platform_override:adPlatform, precio }, { ...deps, save:false });
-    additional = await generate(db, { ...input, idioma:lang, tipo:'anuncio_meta', analysis_filters, platform_override:adPlatform, source_content:primary.contenido, precio }, { ...deps, save:false });
+    if (post.objetivo_negocio === 'cotizacion' && adVisual === 'carrusel') {
+      const carousel = JSON.parse(primary.contenido);
+      const close = carousel.slides.findLast(s => s.layout === 'cierre');
+      if (close) close.data.ctaText = lang === 'en' ? 'Request a quote' : 'Solicita una cotización';
+      primary.contenido = JSON.stringify(carousel,null,2);
+    }
+    additional = await generate(db, { ...input, idioma:lang, tipo:'anuncio_meta', analysis_filters, platform_override:adPlatform, source_content:primary.contenido, precio, ad_profile:input.ad_profile }, { ...deps, save:false });
     additional.plataforma = null; // Un mismo anuncio se muestra en Facebook e Instagram; el JSON declara las ubicaciones.
   } else if (extra) {
     primary = await generate(db, { ...input, idioma:lang, tipo:extra, strict:true, analysis_filters, video_config:videoConfig }, { ...deps, save:false });
@@ -516,7 +570,7 @@ async function generatePackage(db, input = {}, deps = {}) {
   if (primary && extra === 'prompt_flow') warnings.push('El guion principal se conserva dentro del contrato; prompts y copy se derivan de él.');
   if (isAd) warnings.push('Anuncio Meta: los textos se derivan de la pieza visual; no se generan copies orgánicos. Nada se publica ni se lanza automáticamente.');
   const validations = { contract_version:1, shared_brief:true, derived_outputs:!!primary, human_review_required:true, primary_validation:primary ? { ok:true, tipo:primary.tipo } : null, pending_data:pending };
-  const brief = packageBrief(post);
+  const brief = { ...packageBrief(post), ad_profile:input.ad_profile || 'business_suite' };
   const concept = { title:post.titulo, objective:post.objetivo_marketing, message:post.titulo, structure:isAd ? `anuncio_meta+${adVisual}` : extra || 'copy', language:lang };
   const packageData = { contract_version:1, brief, concept, primary:primary ? { tipo:primary.tipo, idioma:primary.idioma, contenido:primary.contenido } : null,
     outputs:{ copy:copies.map((x, i) => ({ plataforma:destinos[i], idioma:x.idioma, contenido:x.contenido })), additional:additional ? { tipo:additional.tipo, idioma:additional.idioma, contenido:additional.contenido } : null },
@@ -531,6 +585,7 @@ async function generatePackage(db, input = {}, deps = {}) {
     const saveOne = item => {
       if (!item) return null;
       const generatedId = insert.run(item.post_id, item.plan_idea_id, packageId, item.tipo, item.idioma, item.plataforma, item.contenido, 'revision',item.visual_repair_used || 0,JSON.stringify(item.pending || [])).lastInsertRowid;
+      if (item.tipo === 'anuncio_meta') paid.register(db,generatedId);
       if (item.tipo === 'guion' || item.tipo === 'prompt_flow') {
         const part = db.prepare('INSERT INTO generated_parts(generated_id,clip_number,funcion,duracion,audio,dialogo,prompt_flow,contenido) VALUES(?,?,?,?,?,?,?,?)');
         for (const p of parseVideoParts(item.contenido)) part.run(generatedId, p.clip_number, p.funcion, p.duracion, p.audio, p.dialogo, p.prompt_flow, p.contenido);
@@ -565,6 +620,18 @@ function setEstado(db, id, estado, revisor = null) {
     let json; try { json = JSON.parse(current.contenido); } catch { throw err(422, 'Anuncio: JSON inválido'); }
     const validation = ads.validate(json, { ready:true });
     if (!validation.ok) throw err(422, validation.errors.join('; '));
+    const pack = current.package_id && db.prepare('SELECT brief_json FROM content_packages WHERE id=?').get(current.package_id);
+    if (pack) {
+      const brief=JSON.parse(pack.brief_json);
+      if (brief.objetivo_negocio==='cotizacion') {
+        const visual=db.prepare("SELECT contenido,tipo FROM generated WHERE package_id=? AND tipo IN ('imagen_unica','carrusel') ORDER BY id LIMIT 1").get(current.package_id);
+        if (visual) {
+          const item=JSON.parse(visual.contenido);
+          const cta=visual.tipo==='imagen_unica'?item.visual?.visualCta:item.slides?.find(s=>s.layout==='cierre')?.data?.ctaText;
+          if (/reserva ahora|book now/i.test(String(cta||''))) throw err(422,'El visual invita a reservar, pero el objetivo del anuncio es cotizar. Corrige el CTA visual.');
+        }
+      }
+    }
   }
   if(estado==='aprobado' && current.tipo==='carrusel'){
     let json;try{json=JSON.parse(current.contenido);}catch{throw err(422,'Carrusel: JSON inválido');}
@@ -576,6 +643,8 @@ function setEstado(db, id, estado, revisor = null) {
   const r = db.prepare('UPDATE generated SET estado=? WHERE id=?').run(estado, id);
   if (!r.changes) throw err(404, 'No existe el contenido generado');
   db.prepare('INSERT INTO approval_events(generated_id,estado,revisor) VALUES(?,?,?)').run(id, estado, revisor || null);
+  if(current.tipo==='anuncio_meta')db.prepare("UPDATE ad_campaigns SET status=? WHERE generated_id=? AND status IN ('contenido_revision','creatividad_aprobada')")
+    .run(estado==='aprobado'?'creatividad_aprobada':'contenido_revision',id);
   return { id: Number(id), estado };
 }
 

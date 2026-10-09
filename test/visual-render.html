@@ -7,13 +7,15 @@ async function run(){
     const w=frame.contentWindow;
     const fixture={format:'imagen_unica',version:1,tipo:'producto',plataforma:'instagram',idioma:'es',resource:{url:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'},visual:{headline:'Planifica tu primer viaje a Cusco',support:'Decide qué reservar primero con orientación personalizada',visualCta:'Consulta tus fechas'},alt:'Imagen ficticia para tests',cta:{text:'Consulta tus fechas',destination:''},warnings:[],pending:[]};
     const results=[];
-    for(const tipo of ['producto','informativo','testimonio']) {
-      const item=structuredClone(fixture);item.tipo=tipo;
+    for(const aspect of ['4:5','9:16']) for(const tipo of ['producto','informativo','testimonio']) {
+      const item=structuredClone(fixture);item.tipo=tipo;item.visual.aspect=aspect;item.visual.overlayStrength=70;
       if(tipo==='testimonio'){item.testimonial={quote:'Planificaron nuestro viaje con cuidado.',by:'Fixture ficticio'};item.visual.support=item.testimonial.quote;}
       await w.show(item,{resources:[fixture.resource.url],testimonials:[item.testimonial?.quote]});
-      const check=w.TikaymiVisual.validateRender(w.document.getElementById('canvas'));
-      if(!check.ok)throw new Error(tipo+': '+check.errors.join(';'));
-      results.push(tipo+': PASS');
+      const canvas=w.document.getElementById('canvas'),check=w.TikaymiVisual.validateRender(canvas);
+      if(!check.ok)throw new Error(tipo+' '+aspect+': '+check.errors.join(';'));
+      if(canvas.clientWidth!==1080||canvas.clientHeight!==(aspect==='9:16'?1920:1350))throw new Error(tipo+' '+aspect+': dimensiones incorrectas');
+      if(w.document.getElementById('download').disabled)throw new Error(tipo+' '+aspect+': '+w.document.getElementById('status').textContent);
+      results.push(tipo+' '+aspect+': PASS');
     }
     w.document.querySelector('#canvas h1, #canvas .t-quote').textContent='texto '.repeat(300);
     if(w.TikaymiVisual.validateRender(w.document.getElementById('canvas')).ok)throw new Error('No detecta texto desbordado');

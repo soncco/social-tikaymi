@@ -1,5 +1,7 @@
 // Correcciones humanas y versionado de borradores. Cada edición vuelve a revisión.
 const { isCloudinaryPhoto } = require('../../public/visual-contract');
+const ads = require('./ads');
+const paid = require('./paid');
 const err = (status, message) => Object.assign(new Error(message), { status });
 
 // URLs de foto de una pieza visual: imagen única (resource.url) o carrusel (imageUrl, antes/después y galería).
@@ -42,11 +44,22 @@ function edit(db, id, { contenido, segmento = null, motivo } = {}) {
   const current = getGenerated(db, id);
   if (!String(contenido || '').trim()) throw err(400, 'contenido es obligatorio');
   if (!String(motivo || '').trim()) throw err(400, 'motivo es obligatorio');
+  if(current.tipo==='anuncio_meta'){
+    let before,after;try{before=JSON.parse(current.contenido);after=JSON.parse(contenido);}catch{throw err(422,'Anuncio: JSON inválido');}
+    const validation=ads.validate(after,{ready:true});
+    if(!validation.ok)throw err(422,validation.errors.join('; '));
+    for(const previous of before.variantes||[]){const next=after.variantes.find(v=>v.id===previous.id);if(next&&next.campaign_code!==previous.campaign_code)throw err(409,`Conserva el código ${previous.campaign_code} de la variante ${previous.id}`);}
+    if(JSON.stringify(before.precio)!==JSON.stringify(after.precio))throw err(409,'El precio del anuncio no se cambia en el JSON. Actualiza el brief y el visual con condiciones confirmadas.');
+  }
   return db.transaction(() => {
     const version = (db.prepare('SELECT COALESCE(MAX(version),0) n FROM generated_revisions WHERE generated_id=?').get(id).n || 0) + 1;
     const revisionId = db.prepare('INSERT INTO generated_revisions(generated_id,version,contenido,segmento,motivo) VALUES(?,?,?,?,?)')
       .run(id, version, String(contenido), segmento, String(motivo).trim()).lastInsertRowid;
     db.prepare("UPDATE generated SET contenido=?, estado='revision' WHERE id=?").run(String(contenido), id);
+    if(current.tipo==='anuncio_meta'){
+      paid.syncVariants(db,id);
+      db.prepare("UPDATE ad_campaigns SET status='contenido_revision' WHERE generated_id=? AND status IN ('creatividad_aprobada','campana_preparada')").run(id);
+    }
     const fotos_registradas = registerPastedPhotos(db, id, current.tipo, String(contenido));
     return { id: Number(id), revision_id: Number(revisionId), version, estado: 'revision', segmento, motivo: String(motivo).trim(), anterior: current.contenido, fotos_registradas };
   })();
@@ -77,7 +90,7 @@ async function regenerate(db, id, { segmento = 'pieza', automatic_visual_repair 
   const packBrief = pack ? JSON.parse(pack.brief_json) : undefined;
   const generated = await content.generate(db, {
     post_id: current.post_id, plan_idea_id: current.plan_idea_id || undefined, tipo: current.tipo, idioma: current.idioma,
-    brief:packBrief, precio:packBrief?.precio || undefined,
+    brief:packBrief, precio:packBrief?.precio || undefined, ad_profile:packBrief?.ad_profile,
     platform_override:current.plataforma || undefined, ad_base:adBase,
     source_content: current.contenido, strict: ['imagen_unica','carrusel','guion','prompt_flow'].includes(current.tipo),
     repair_feedback: `Segmento a corregir: ${segmento}\nMotivo: ${instruccion}`

@@ -22,6 +22,8 @@ const revisions = require('./modules/revisions');
 const library = require('./modules/library');
 const visualReview = require('./modules/visual-review');
 const metricsMod = require('./modules/metrics');
+const paid = require('./modules/paid');
+const leads = require('./modules/leads');
 
 const wrap = fn => (req, res, next) => { try { res.json(fn(req, res) ?? { ok: true }); } catch (e) { next(e); } };
 const wrapAsync = fn => async (req, res, next) => { try { res.json((await fn(req, res)) ?? { ok: true }); } catch (e) { next(e); } };
@@ -55,14 +57,7 @@ function api(db) {
 
   // Leads
   r.get('/leads', wrap(() => db.prepare('SELECT * FROM leads ORDER BY id DESC').all()));
-  r.post('/leads', wrap(req => {
-    const b = req.body;
-    if (b.estado && !C.LEAD_ESTADOS.includes(b.estado)) throw Object.assign(new Error('estado inválido'), { status: 400 });
-    const post = b.campaign_code && db.prepare('SELECT id FROM posts WHERE campaign_code=?').get(b.campaign_code);
-    const id = db.prepare('INSERT INTO leads(post_id,campaign_code,fuente,estado,fecha_viaje,viajeros,notas) VALUES(?,?,?,?,?,?,?)')
-      .run(b.post_id ?? post?.id ?? null, b.campaign_code ?? null, b.fuente ?? null, b.estado ?? 'nuevo', b.fecha_viaje ?? null, b.viajeros ?? null, b.notas ?? null).lastInsertRowid;
-    return { id, atribuido: !!(b.post_id ?? post) };
-  }));
+  r.post('/leads', wrap(req => leads.create(db,req.body||{})));
   r.put('/leads/:id', wrap(req => {
     if (!C.LEAD_ESTADOS.includes(req.body.estado)) throw Object.assign(new Error('estado inválido'), { status: 400 });
     return revisions.recordLeadTransition(db, req.params.id, req.body.estado);
@@ -85,6 +80,21 @@ function api(db) {
   // Exportación: informe Markdown y JSON compatible con el constructor de carruseles
   r.get('/report.md', (req, res, next) => { try { res.type('text/markdown').send(exporter.reportMarkdown(db, { periodo: req.query.periodo })); } catch (e) { next(e); } });
   r.post('/export/carousel', wrap(req => exporter.carouselExport(req.body)));
+  r.get('/ads/profiles', wrap(() => require('./modules/ads').PROFILES));
+  r.get('/ads/campaigns', wrap(() => paid.list(db)));
+  r.get('/ads/campaigns/:id', wrap(req => paid.get(db,req.params.id)));
+  r.put('/ads/campaigns/:id', wrap(req => paid.update(db,req.params.id,req.body||{})));
+  r.put('/ads/campaigns/:id/price', wrap(req => paid.updatePrice(db,req.params.id,req.body||{})));
+  r.post('/ads/campaigns/:id/clone', wrap(req => paid.cloneForCountry(db,req.params.id,req.body?.country)));
+  r.post('/ads/campaigns/:id/prepare', wrap(req => paid.prepare(db,req.params.id)));
+  r.post('/ads/campaigns/:id/launch', wrap(req => paid.launch(db,req.params.id,req.body||{})));
+  r.get('/ads/campaigns/:id/results', wrap(req => paid.results(db,req.params.id)));
+  r.get('/ads/compare/:generatedId', wrap(req => paid.compareCountries(db,req.params.generatedId)));
+  r.get('/ads/campaigns/:id/export', wrap(req => paid.exportPackage(db,req.params.id)));
+  r.post('/ads/metrics', wrap(req => paid.addMetric(db,req.body||{})));
+  r.post('/ads/metrics/headers', wrap(req => paid.csvHeaders(req.body?.csv)));
+  r.post('/ads/metrics/preview', wrap(req => paid.csvPreview(db,req.body||{})));
+  r.post('/ads/metrics/import', wrap(req => paid.csvImport(db,req.body||{})));
 
   r.post('/links', wrap(req => buildLinks(req.body)));
 

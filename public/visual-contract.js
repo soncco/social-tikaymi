@@ -34,6 +34,9 @@
     }
     // Precio opcional: lo coloca el servidor desde el dato escrito por una persona, nunca la IA.
     if (x?.visual?.price != null && (typeof x.visual.price !== 'string' || words(x.visual.price) > 8 || x.visual.price.length > 40)) errors.push('visual.price: máximo 8 palabras y 40 caracteres');
+    if (x?.visual?.aspect != null && !['4:5','9:16'].includes(x.visual.aspect)) errors.push('visual.aspect: usa 4:5 o 9:16');
+    if (x?.visual?.overlayStrength != null && (!Number.isFinite(Number(x.visual.overlayStrength)) || Number(x.visual.overlayStrength)<0 || Number(x.visual.overlayStrength)>100)) errors.push('visual.overlayStrength: usa 0 a 100');
+    for (const field of ['safeTop','safeBottom']) if (x?.visual?.[field] != null && (!Number.isFinite(Number(x.visual[field])) || Number(x.visual[field])<0 || Number(x.visual[field])>30)) errors.push(`visual.${field}: usa 0 a 30%`);
     const nonEmpty = v => typeof v === 'string' && v.trim().length > 0;
     if (!nonEmpty(x?.visual?.headline)) errors.push('visual.headline: obligatorio');
     if (!nonEmpty(x?.alt)) errors.push('alt: texto alternativo obligatorio');

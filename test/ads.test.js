@@ -39,7 +39,7 @@ test('validación del anuncio: límites, precio, urgencia, hashtags y variantes 
   assert.equal(ads.validate(ad(), { idioma:'en' }).ok, true);
   const errors = v => ads.validate(ad([variant('Hook one is fine here.'), v]), { idioma:'en', sourcesText:'From USD 650 per person' }).errors.join(' | ');
   assert.match(errors(variant('x'.repeat(126))), /gancho: 126 caracteres, máximo 125/);
-  assert.match(errors(variant('Ok', { titulo:'t'.repeat(41) })), /titulo: 41 caracteres/);
+  assert.match(errors(variant('Ok', { titulo:'t'.repeat(26) })), /titulo: 26 caracteres, máximo 25/);
   // El cuerpo largo solo avisa hasta 600; caso real: 373 caracteres bloqueaba todo el anuncio.
   const long = ads.validate(ad([variant('Hook one is fine here.', { cuerpo:'c'.repeat(373) }), variant('Hook two')]), { idioma:'en' });
   assert.equal(long.ok, true);
@@ -50,8 +50,8 @@ test('validación del anuncio: límites, precio, urgencia, hashtags y variantes 
   assert.match(errors(variant('Last spots for July!')), /urgencia/);
   assert.match(errors(variant('Plan Machu Picchu #Cusco')), /hashtags/);
   assert.match(errors(variant('See wa.me/51999 now')), /URL va en el campo/);
-  assert.match(errors(variant('Only USD 400 per person')), /precio «USD 400» sin fuente aprobada/);
-  assert.equal(errors(variant('From USD 650 per person, fully planned.')), '');
+  assert.match(errors(variant('Only USD 400 per person')), /precio «USD 400» sin precio confirmado/);
+  assert.match(errors(variant('From USD 650 per person, fully planned.')), /sin precio confirmado/, 'una cifra suelta de la fuente no autoriza el precio del producto');
   assert.match(errors(variant('Hook one is fine here.')), /gancho distinto/);
   assert.match(ads.validate(ad([variant('Solo una')]), {}).errors.join(), /variantes: se requieren 2–3/);
   assert.match(ads.validate(ad(), { idioma:'es' }).errors.join(), /idioma: debe ser es/);
@@ -72,7 +72,9 @@ test('paquete Anuncio Meta: visual + textos con códigos, WhatsApp y UTM; sin co
     assert.deepEqual(saved.variantes.map(v => v.campaign_code), ['ADEN001A', 'ADEN001B']);
     assert.deepEqual(saved.ubicaciones, ['facebook', 'instagram']);
     assert.equal(saved.boton, 'Send WhatsApp message');
-    assert.match(saved.variantes[0].mensaje_whatsapp, /^Hi Deicy, I saw the ad for 5-Day Cusco, Sacred Valley & Machu Picchu .* Code: ADEN001A$/);
+    assert.match(saved.variantes[0].mensaje_whatsapp, /^Hi, I'd like a quote for Cusco 5 days\. Code: ADEN001A$/);
+    assert.ok(saved.variantes[0].mensaje_whatsapp.length <= 80);
+    assert.ok(saved.saludo.length <= 300);
     const url = new URL(saved.variantes[1].url_destino);
     assert.equal(url.origin + url.pathname, TOUR);
     assert.deepEqual(Object.fromEntries(url.searchParams), { utm_source:'meta', utm_medium:'paid_social', utm_campaign:'aden001', utm_content:'b' });
@@ -88,8 +90,7 @@ test('paquete Anuncio Meta: visual + textos con códigos, WhatsApp y UTM; sin co
     const adId = db.prepare("SELECT id FROM generated WHERE tipo='anuncio_meta' AND package_id=?").get(result.id).id;
     assert.equal(content.setEstado(db, adId, 'aprobado').estado, 'aprobado');
     const broken = structuredClone(saved); broken.variantes[0].gancho = 'Trains at [FALTA DATO: horario]';
-    revisions.edit(db, adId, { contenido:JSON.stringify(broken), motivo:'prueba' });
-    assert.throws(() => content.setEstado(db, adId, 'aprobado'), /contiene \[FALTA DATO/);
+    assert.throws(() => revisions.edit(db, adId, { contenido:JSON.stringify(broken), motivo:'prueba' }), /contiene \[FALTA DATO/);
   } finally { db.close(); }
 });
 
@@ -185,4 +186,26 @@ test('precio opcional del anuncio: validado, colocado por el servidor en textos,
     assert.equal(JSON.parse(plain.primary.contenido).visual.price, undefined);
     assert.equal(JSON.parse(plain.additional.contenido).precio, null);
   } finally { db.close(); }
+});
+
+test('precio estructurado requiere el tour aprobado exacto antes de generar', async () => {
+  const db=setup();
+  try {
+    const precio={amount:440,currency:'USD',mode:'desde',unit:'persona',conditions:'Según fecha',confirmation:'Deicy',product_url:'https://tikaymi.com/otro-tour/'};
+    await assert.rejects(content.generatePackage(db,{brief,extra:'anuncio_meta',precio}),/elige el tour aprobado al que corresponde/);
+    await assert.rejects(content.generatePackage(db,{brief:{...brief,source_url:undefined},extra:'anuncio_meta',precio:{...precio,product_url:''}}),/elige el tour aprobado/);
+  } finally { db.close(); }
+});
+
+test('cotización nueva alinea el CTA de la imagen con el objetivo comercial', async () => {
+  const db=setup();
+  try {
+    const input={...brief,objetivo_negocio:'cotizacion',cta:'Request a quote'};
+    const result=await withKey(()=>content.generatePackage(db,{brief:input,extra:'anuncio_meta'},{fetchImpl:fakeLlm([ad()])}));
+    const visual=JSON.parse(result.primary.contenido),announcement=JSON.parse(result.additional.contenido);
+    assert.equal(visual.visual.visualCta,'Request a quote');
+    assert.equal(visual.cta.text,'Request a quote');
+    assert.equal(announcement.objetivo_negocio,'cotizacion');
+    assert.doesNotMatch(announcement.variantes[0].mensaje_whatsapp,/book now/i);
+  }finally{db.close();}
 });
