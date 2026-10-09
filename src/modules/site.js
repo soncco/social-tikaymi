@@ -115,6 +115,28 @@ async function sync(db, { fetchImpl = globalThis.fetch } = {}) {
   } finally { running = false; }
 }
 
+async function refreshPage(db, url, { fetchImpl = globalThis.fetch } = {}) {
+  let parsed;
+  try { parsed = new URL(String(url || '')); } catch { throw err('URL de página inválida'); }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'tikaymi.com' || parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw err('Solo se pueden actualizar páginas HTTPS de tikaymi.com');
+  }
+  const pageUrl=parsed.href;
+  const previous=db.prepare('SELECT * FROM site_pages WHERE url=? AND active=1').get(pageUrl);
+  if(!previous)throw err('La página no existe o está archivada',404);
+  if(running)throw err('Ya hay una actualización web en curso',409);
+  running=true;
+  try {
+    const page=extract(await fetchText(pageUrl,fetchImpl),pageUrl);
+    const changed=previous.content_hash!==page.content_hash;
+    db.prepare(`UPDATE site_pages SET title=@title,description=@description,body_text=@body_text,content_hash=@content_hash,
+      fetched_at=CURRENT_TIMESTAMP,approved=CASE WHEN content_hash=@content_hash THEN approved ELSE 0 END,
+      changed_at=CASE WHEN content_hash=@content_hash THEN changed_at ELSE CURRENT_TIMESTAMP END
+      WHERE url=@url AND active=1`).run({...page,url:pageUrl});
+    return {url:pageUrl,title:page.title,changed,approved:changed?false:!!previous.approved};
+  } finally { running=false; }
+}
+
 function status(db) {
   return { latest:db.prepare('SELECT * FROM site_syncs ORDER BY id DESC LIMIT 1').get() || null,
     pages:db.prepare('SELECT count(*) total, sum(CASE WHEN approved=1 THEN 1 ELSE 0 END) approved FROM site_pages WHERE active=1').get() };
@@ -159,4 +181,4 @@ function approveBatch(db, { urls, kinds, languages, approved = true } = {}) {
   return { approved: approved === true, updated: result.changes };
 }
 
-module.exports = { SITEMAP, parseSitemap, extract, sync, status, list, approve, approveBatch };
+module.exports = { SITEMAP, parseSitemap, extract, sync, refreshPage, status, list, approve, approveBatch };

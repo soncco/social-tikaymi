@@ -138,3 +138,51 @@ test('sin tour aprobado el anuncio queda con el enlace como dato pendiente', asy
     assert.match(JSON.parse(db.prepare('SELECT pending_json FROM generated WHERE id=?').get(result.additional.id).pending_json).join(), /página del tour/);
   } finally { db.close(); }
 });
+
+test('precio opcional del anuncio: validado, colocado por el servidor en textos, imagen y ficha del carrusel', async () => {
+  assert.equal(ads.normalizePrice('  Desde USD 890   por persona '), 'Desde USD 890 por persona');
+  assert.equal(ads.normalizePrice(''), null);
+  assert.throws(() => ads.normalizePrice('890'), /cifra con su moneda/);
+  assert.throws(() => ads.normalizePrice('USD 890 low cost'), /no compitas por precio/);
+  assert.throws(() => ads.normalizePrice('x'.repeat(30) + ' USD 890 por persona'), /máximo 40/);
+  const db = setup(), prompts = [];
+  try {
+    const priced = ad([variant('From USD 890 per person: 5 days, trains and tickets coordinated.'), variant('Your first trip to Peru, planned day by day.')]);
+    priced.pending = ['[FALTA DATO: precio del paquete]', '[FALTA DATO: temporada]'];
+    const aiImage = { ...image, visual:{ ...image.visual, price:'USD 1' } };
+    const fetchImpl = async (_url, opts) => {
+      const prompt = JSON.parse(opts.body).messages[0].content; prompts.push(prompt);
+      const text = prompt.includes('"format":"anuncio_meta"') ? JSON.stringify(priced) : JSON.stringify(aiImage);
+      return { ok:true, json:async () => ({ content:[{ type:'text', text }] }) };
+    };
+    const result = await withKey(() => content.generatePackage(db, { brief, extra:'anuncio_meta', precio:'From USD 890 per person' }, { fetchImpl }));
+    assert.match(prompts[0], /No lo escribas en los textos/);
+    assert.match(prompts[1], /citarlo literal/);
+    assert.equal(JSON.parse(result.primary.contenido).visual.price, 'From USD 890 per person', 'el servidor reemplaza cualquier precio que proponga la IA');
+    const saved = JSON.parse(result.additional.contenido);
+    assert.equal(saved.precio, 'From USD 890 per person');
+    assert.deepEqual(saved.pending, ['[FALTA DATO: temporada]'], 'el pendiente de precio desaparece; los demás se conservan');
+    assert.equal(JSON.parse(db.prepare('SELECT brief_json FROM content_packages WHERE id=?').get(result.id).brief_json).precio, 'From USD 890 per person');
+    await assert.rejects(content.generatePackage(db, { brief, extra:'anuncio_meta', precio:'barato' }), /Precio/);
+
+    const slides = [{ layout:'portada', data:{ eyebrow:'Peru', h1:'Machu Picchu in 5 days', imageUrl:'https://fixture.invalid/mapi.jpg' } }, { layout:'ficha', data:{ eyebrow:'The trip', h2:'What Deicy coordinates', meta:[{ k:'Days', v:'5' }, { k:'Price', v:'On request' }], body:'Trains, tickets and transfers.' } }, { layout:'cierre', data:{ eyebrow:'Next step', h2:'Plan your dates', body:'Share your travel dates with Deicy.', ctaText:'Write to Deicy' } }];
+    const carouselLlm = async (_url, opts) => {
+      const prompt = JSON.parse(opts.body).messages[0].content;
+      const text = prompt.includes('"format":"anuncio_meta"') ? JSON.stringify(ad()) : JSON.stringify({ tipo:'producto', slides });
+      return { ok:true, json:async () => ({ content:[{ type:'text', text }] }) };
+    };
+    const carousel = await withKey(() => content.generatePackage(db, { brief, extra:'anuncio_meta', ad_visual:'carrusel', precio:'From USD 890 per person' }, { fetchImpl:carouselLlm }));
+    assert.deepEqual(JSON.parse(carousel.primary.contenido).slides[1].data.meta, [{ k:'Days', v:'5' }, { k:'Price', v:'From USD 890 per person' }]);
+    const noFicha = async (_url, opts) => {
+      const prompt = JSON.parse(opts.body).messages[0].content;
+      const text = prompt.includes('"format":"anuncio_meta"') ? JSON.stringify(ad()) : JSON.stringify({ tipo:'producto', slides:slides.map(x => x.layout === 'ficha' ? { layout:'split', data:{ ...x.data, imageUrl:'https://fixture.invalid/mapi.jpg' } } : x) });
+      return { ok:true, json:async () => ({ content:[{ type:'text', text }] }) };
+    };
+    const missing = await withKey(() => content.generatePackage(db, { brief, extra:'anuncio_meta', ad_visual:'carrusel', precio:'From USD 890 per person' }, { fetchImpl:noFicha }));
+    assert.match(missing.primary.pending.join(), /no tiene lámina «ficha»/);
+    // Sin precio, la imagen no lleva etiqueta aunque la IA la proponga.
+    const plain = await withKey(() => content.generatePackage(db, { brief, extra:'anuncio_meta' }, { fetchImpl:fakeLlm([ad()]) }));
+    assert.equal(JSON.parse(plain.primary.contenido).visual.price, undefined);
+    assert.equal(JSON.parse(plain.additional.contenido).precio, null);
+  } finally { db.close(); }
+});

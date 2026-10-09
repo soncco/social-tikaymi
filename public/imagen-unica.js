@@ -29,6 +29,9 @@ function footBlock(onPhoto){
 function ctaBlock(text,margin){if(!text?.trim())return null;const cta=textElement('span',text);cta.className='t-cta';cta.style.marginTop=margin+'px';return cta;}
 function ridgeRow(ctaText,margin){const row=div('t-ridge-row');row.style.marginTop=margin+'px';row.append(ridge(0));const cta=ctaBlock(ctaText,0);if(cta)row.appendChild(cta);return row;}
 function withClass(el,className,style={}){el.className=className;Object.assign(el.style,style);return el;}
+// Precio del anuncio: etiqueta con borde lima, solo si una persona lo indicó.
+function priceTag(text,margin,onDark){return text?.trim()?withClass(textElement('span',text.trim()),'t-price'+(onDark?' on-dark':''),{marginTop:margin+'px'}):null;}
+const appendIf=(parent,el)=>{if(el)parent.appendChild(el);};
 // Mismas plantillas del constructor: producto → Portada foto a sangre, informativo → Portada editorial, testimonio → Cita.
 function renderTemplate(data,url){
   const lang=data.idioma==='en'?'en':'es', label=LABELS[lang][data.tipo] || 'Tikaymi', v=data.visual || {};
@@ -37,6 +40,7 @@ function renderTemplate(data,url){
     const head=div('',withClass(textElement('span',label),'t-badge'));
     top.append(head,withClass(div(''),'t-rule',{marginTop:'38px'}),withClass(textElement('h1',v.headline),'t-h1',{marginTop:'44px'}));
     if(v.support)top.appendChild(withClass(textElement('p',v.support),'t-body',{marginTop:'32px'}));
+    appendIf(top,priceTag(v.price,32,false));
     top.appendChild(ridgeRow(v.visualCta,40));
     node.append(top,photoBlock(url,lang,'t-editorial-photo'),footBlock(false));
     return;
@@ -50,14 +54,29 @@ function renderTemplate(data,url){
   } else {
     bottom.append(withClass(textElement('span',label),'t-eyebrow on-dark'),withClass(textElement('h1',v.headline),'t-h1',{marginTop:'26px',color:'#fff'}));
     if(v.support)bottom.appendChild(withClass(textElement('p',v.support),'t-body on-dark',{marginTop:'32px'}));
+    appendIf(bottom,priceTag(v.price,32,true));
     bottom.appendChild(ridgeRow(v.visualCta,42));
   }
   if(data.tipo==='testimonio' && v.visualCta?.trim())bottom.appendChild(ctaBlock(v.visualCta,36));
   node.append(bottom,footBlock(true));
 }
-function showPending(items){
+const PHOTO_PENDING='Fotografía aprobada pendiente';
+// Cada pendiente se resuelve aquí mismo: la foto en el bloque superior; un dato, retirándolo
+// cuando la imagen no lo afirma o ya se comprobó (queda registrado como corrección humana).
+function showPending(items,previewOnly){
   const card=document.getElementById('pending-card'),list=document.getElementById('pending-summary');
-  list.replaceChildren(...items.map(x=>textElement('li',String(x).replace(/^\[FALTA DATO:\s*|\]$/g,''))));
+  list.replaceChildren(...items.map(x=>{
+    const li=textElement('li',String(x).replace(/^\[FALTA DATO:\s*|\]$/g,''));
+    if(x===PHOTO_PENDING){li.appendChild(withClass(textElement('small',' Elige o pega una foto arriba.'),'muted'));return li;}
+    const b=textElement('button','La imagen no lo afirma · retirar');b.type='button';b.className='secondary small-btn';b.disabled=previewOnly;
+    b.onclick=()=>{
+      if(!confirm('¿Confirmas que la imagen no afirma este dato o que ya lo comprobaste?'))return;
+      const box=document.getElementById('pending-data');
+      box.value=box.value.split('\n').filter(line=>line.trim()!==String(x).trim()).join('\n');
+      savePiece('Retiro de dato pendiente: '+String(x).slice(0,120));
+    };
+    li.appendChild(b);return li;
+  }));
   card.hidden=!items.length;
 }
 async function loadApprovals(){
@@ -77,7 +96,7 @@ async function show(data, approvals=approvedContext, options={}) {
   const previewOnly=!!options.previewOnly;
   const sequence=++renderSequence;
   if(!previewOnly)current=data;
-  for(const field of ['headline','support','visualCta'])document.getElementById(field).value=data.visual?.[field] || '';
+  for(const field of ['headline','support','visualCta','price'])document.getElementById(field).value=data.visual?.[field] || '';
   document.getElementById('alt').value=data.alt || '';
   document.getElementById('pending-data').value=Array.isArray(data.pending)?data.pending.join('\n'):'';
   document.getElementById('download').disabled=true;
@@ -95,14 +114,16 @@ async function show(data, approvals=approvedContext, options={}) {
     if(sequence!==renderSequence)return;
   }
   renderTemplate(data,url);
-  showPending([...validation.pending]);
+  showPending([...validation.pending],previewOnly);
   if (document.fonts) await document.fonts.ready;
   if(sequence!==renderSequence)return;
   const render=TikaymiVisual.validateRender(node);
   const errors=[...validation.errors,...validation.pending,...render.errors];
   statusNode.textContent=previewOnly
     ? 'Vista previa actualizada. Guarda los cambios para validarlos antes de descargar.'+(errors.length?' Pendientes: '+errors.join(' · '):'')
-    : errors.length ? 'Revisión pendiente: '+errors.join(' · ') : 'Composición comprobada. Confirma tu revisión humana para descargar.';
+    : errors.length ? (validation.pending.length && validation.pending.length===errors.length
+        ? `Para descargar, resuelve ${errors.length===1?'el dato pendiente':'los '+errors.length+' datos pendientes'} en «Datos que faltan» (arriba).`
+        : 'No se puede descargar todavía: '+errors.join(' · ')) : 'Composición comprobada. Confirma tu revisión humana para descargar.';
   document.getElementById('download').disabled=previewOnly || errors.length>0;
   if(generatedId && !previewOnly) {
     const res=await fetch('/api/generated/'+generatedId+'/render-validation',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({contenido:originalContent,errors})});
@@ -118,6 +139,8 @@ async function show(data, approvals=approvedContext, options={}) {
   for(const copy of data.copies || []) copies.append(textElement('h3',copy.plataforma),textElement('pre',copy.text));
 }
 document.getElementById('file').onchange=async e=>{ try { generatedId=null; await loadApprovals(); await show(JSON.parse(await e.target.files[0].text())); } catch(err){document.getElementById('download').disabled=true;statusNode.textContent=err.message;} };
+// El precio vacío se omite: la imagen no muestra etiqueta.
+function visualFromInputs(){const v=Object.fromEntries(['headline','support','visualCta','price'].map(field=>[field,document.getElementById(field).value.trim()]));if(!v.price)delete v.price;return v;}
 let previewTimer;
 function updateLivePreview(){
   clearTimeout(previewTimer);document.getElementById('download').disabled=true;
@@ -126,16 +149,17 @@ function updateLivePreview(){
   previewTimer=setTimeout(()=>{
     const draft=structuredClone(current),url=document.getElementById('photo-url').value.trim();
     draft.resource={url,pending:url?'':'Fotografía aprobada pendiente'};
-    draft.visual=Object.fromEntries(['headline','support','visualCta'].map(field=>[field,document.getElementById(field).value.trim()]));
+    draft.visual=visualFromInputs();
     draft.alt=document.getElementById('alt').value.trim();
-    draft.pending=document.getElementById('pending-data').value.split('\n').map(x=>x.trim()).filter(x=>x && x!=='Fotografía aprobada pendiente');
+    draft.pending=document.getElementById('pending-data').value.split('\n').map(x=>x.trim()).filter(x=>x && x!==PHOTO_PENDING);
     if(!url)draft.pending.push('Fotografía aprobada pendiente');
     show(draft,approvedContext,{previewOnly:true}).catch(err=>{statusNode.textContent='No se pudo actualizar la vista previa: '+err.message;});
   },450);
 }
-for(const field of ['photo-url','headline','support','visualCta','alt','pending-data'])document.getElementById(field).addEventListener('input',updateLivePreview);
+for(const field of ['photo-url','headline','support','visualCta','price','alt','pending-data'])document.getElementById(field).addEventListener('input',updateLivePreview);
 document.getElementById('photo').addEventListener('change',e=>{document.getElementById('photo-url').value=e.target.value;updateLivePreview();});
-document.getElementById('save-photo').onclick=async()=>{
+document.getElementById('save-photo').onclick=()=>savePiece('Corrección humana de foto, texto o pendientes en revisión visual');
+async function savePiece(motivo){
   try {
     if(!current)throw new Error('Abre primero una pieza');
     const url=document.getElementById('photo-url').value.trim() || document.getElementById('photo').value;
@@ -143,18 +167,18 @@ document.getElementById('save-photo').onclick=async()=>{
     if(url && approvedContext.revoked.includes(url))throw new Error('Esa fotografía fue retirada en Biblioteca');
     if(url && !TikaymiVisual.photoAllowed(url,approvedContext))throw new Error('Pega una URL de '+TikaymiVisual.CLOUDINARY_PHOTO_BASE+'… o elige una foto de Biblioteca');
     const next=structuredClone(current);next.resource={url,pending:url?'':'Fotografía aprobada pendiente'};
-    next.visual=Object.fromEntries(['headline','support','visualCta'].map(field=>[field,document.getElementById(field).value.trim()]));
+    next.visual=visualFromInputs();
     next.alt=document.getElementById('alt').value.trim();
-    next.pending=document.getElementById('pending-data').value.split('\n').map(x=>x.trim()).filter(x=>x && x!=='Fotografía aprobada pendiente');
+    next.pending=document.getElementById('pending-data').value.split('\n').map(x=>x.trim()).filter(x=>x && x!==PHOTO_PENDING);
     if(!url)next.pending.push('Fotografía aprobada pendiente');
     if(generatedId){
-      const res=await fetch('/api/generated/'+generatedId+'/edit',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({contenido:JSON.stringify(next,null,2),segmento:'pieza',motivo:'Corrección humana de foto, texto o pendientes en revisión visual'})});
+      const res=await fetch('/api/generated/'+generatedId+'/edit',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({contenido:JSON.stringify(next,null,2),segmento:'pieza',motivo})});
       if(!res.ok)throw new Error((await res.json()).error);
       location.reload();return;
     }
     await show(next);
   }catch(err){statusNode.textContent=err.message;document.getElementById('download').disabled=true;}
-};
+}
 document.getElementById('download').onclick=async()=>{
   try {
     await loadApprovals();

@@ -74,9 +74,10 @@ async function regenerate(db, id, { segmento = 'pieza', automatic_visual_repair 
   const pack=current.package_id ? db.prepare('SELECT brief_json FROM content_packages WHERE id=?').get(current.package_id) : null;
   // Un anuncio regenerado conserva sus códigos de campaña: los leads ya registrados siguen atribuidos.
   let adBase; if (current.tipo === 'anuncio_meta') try { adBase = JSON.parse(current.contenido).codigo_base; } catch { adBase = undefined; }
+  const packBrief = pack ? JSON.parse(pack.brief_json) : undefined;
   const generated = await content.generate(db, {
     post_id: current.post_id, plan_idea_id: current.plan_idea_id || undefined, tipo: current.tipo, idioma: current.idioma,
-    brief:pack ? JSON.parse(pack.brief_json) : undefined,
+    brief:packBrief, precio:packBrief?.precio || undefined,
     platform_override:current.plataforma || undefined, ad_base:adBase,
     source_content: current.contenido, strict: ['imagen_unica','carrusel','guion','prompt_flow'].includes(current.tipo),
     repair_feedback: `Segmento a corregir: ${segmento}\nMotivo: ${instruccion}`

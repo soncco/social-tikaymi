@@ -19,6 +19,7 @@ const planner = require('./modules/planner');
 const site = require('./modules/site');
 const editorialStrategy = require('./modules/editorial-strategy');
 const revisions = require('./modules/revisions');
+const library = require('./modules/library');
 const visualReview = require('./modules/visual-review');
 const metricsMod = require('./modules/metrics');
 
@@ -119,10 +120,7 @@ function api(db) {
     return { id: db.prepare('INSERT INTO approved_info(tipo,titulo,texto,autorizado_publicar,fuente) VALUES(?,?,?,?,?)')
       .run(b.tipo, b.titulo, b.texto, b.autorizado_publicar ? 1 : 0, b.fuente ?? null).lastInsertRowid };
   }));
-  r.put('/approved-info/:id', wrap(req => {
-    const r2 = db.prepare('UPDATE approved_info SET autorizado_publicar=? WHERE id=?').run(req.body.autorizado_publicar ? 1 : 0, req.params.id);
-    if (!r2.changes) throw Object.assign(new Error('No existe'), { status: 404 });
-  }));
+  r.put('/approved-info/:id', wrap(req => library.updateInfo(db, req.params.id, req.body || {})));
   r.delete('/approved-info/:id', wrap(req => db.prepare('DELETE FROM approved_info WHERE id=?').run(req.params.id) && undefined));
 
   // Fase 2 — Biblioteca de fotografías y videos reales
@@ -139,12 +137,14 @@ function api(db) {
     if(!result.changes)throw Object.assign(new Error('Recurso inexistente'),{status:404});
     return {ok:true};
   }));
+  r.put('/assets/:id', wrap(req => library.updateAsset(db, req.params.id, req.body || {})));
   r.delete('/assets/:id', wrap(req => db.prepare('DELETE FROM assets WHERE id=?').run(req.params.id) && undefined));
 
   // Copia manual del sitio público; nunca autoriza automáticamente una página.
   r.get('/site/status', wrap(() => site.status(db)));
   r.get('/site/pages', wrap(req => site.list(db, req.query)));
   r.post('/site/sync', wrapAsync(() => site.sync(db)));
+  r.post('/site/pages/refresh', wrapAsync(req => site.refreshPage(db, req.body?.url)));
   r.put('/site/approve', wrap(req => site.approve(db, req.body?.url, req.body?.approved)));
   r.put('/site/approve-batch', wrap(req => site.approveBatch(db, req.body || {})));
   r.get('/editorial-strategy', wrap(() => editorialStrategy.get(db)));

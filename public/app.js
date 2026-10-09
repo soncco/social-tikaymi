@@ -370,27 +370,30 @@ function pendingBox(g) {
   const items = [...new Set([...declared, ...inText])].map(x => String(x).replace(/^\[FALTA DATO:\s*|\]$/g, ''));
   if (!items.length) return '';
   const how = g.tipo === 'anuncio_meta'
-    ? 'Los textos del anuncio no los incluyen. Si quieres usarlos, apruébalos en Sitio web o Biblioteca y usa «Regenerar parte»; para el enlace, crea el anuncio desde un tour aprobado.'
+    ? 'Es informativo y no bloquea la aprobación: los textos no los mencionan. Para el precio, crea el anuncio con «Precio a mostrar». Para otros datos, regístralos en Configuración → Biblioteca y usa «Regenerar parte». Para el enlace, crea el anuncio desde un tour aprobado.'
     : g.tipo === 'imagen_unica'
     ? 'Resuélvelos en «Revisar y descargar PNG» → Ajustar textos y resolver pendientes. Retira un dato solo si la imagen no lo afirma o ya lo comprobaste.'
     : inText.length
       ? 'El texto todavía contiene marcadores y no puede aprobarse. Usa «Editar texto» para escribir el dato verificado o retirar la frase.'
       : 'No aparecen en el texto: el copy ya puede publicarse sin ellos. Si quieres incluirlos, regístralos en Configuración → Biblioteca o aprueba la página web que los contiene, y usa «Regenerar parte».';
-  return `<div class="notice"><b>Datos que faltan (${items.length})</b><ul>${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul><span class="small">${how}</span></div>`;
+  return `<div class="notice pending-box ${g.tipo === 'anuncio_meta' ? 'soft' : ''}"><b>${g.tipo === 'anuncio_meta' ? 'Datos que la IA no encontró' : 'Datos que faltan'} (${items.length})</b><ul>${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul><span class="small">${how}</span></div>`;
 }
 
 // Anuncio Meta legible: un bloque por variante, con contador de caracteres y botón para copiar cada campo.
 function adView(g) {
   let ad; try { ad = JSON.parse(g.contenido); } catch { return `<pre>${esc(g.contenido)}</pre>`; }
-  const field = (name, text, max) => text ? `<div class="ad-field"><div class="platform-head"><b>${esc(name)}</b><span class="muted small">${max ? `${text.length}/${max}` : ''} <button type="button" class="tertiary small-btn copy-field" data-text="${esc(text)}">Copiar</button></span></div><p>${esc(text).replace(/\n/g,'<br>')}</p></div>` : '';
-  return `<div class="ad-view"><p class="muted small">${esc(ad.objetivo_meta || '')} · ${esc((ad.ubicaciones || []).map(label).join(' + '))} · Botón: ${esc(ad.boton || '')}</p>${(ad.variantes || []).map(v => `<section class="card ad-variant"><h4>Variante ${esc(v.id)} · ${esc(v.angulo)} <span class="badge">${esc(v.campaign_code)}</span></h4>
-    ${field('Texto principal (visible: primeras 125 letras)', v.texto_principal, 0)}${field('Título', v.titulo, 40)}${field('Descripción', v.descripcion, 30)}
-    ${field('Mensaje predeterminado de WhatsApp', v.mensaje_whatsapp, 0)}${field('Enlace «Más información» (con UTM)', v.url_destino, 0)}</section>`).join('')}
-    ${(ad.warnings || []).length ? `<ul class="muted small">${ad.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}</div>`;
+  const field = (name, text, max) => text ? `<div class="ad-field"><span class="ad-label">${esc(name)}${max ? `<small class="${text.length > max ? 'over' : ''}">${text.length}/${max}</small>` : ''}</span><p>${esc(text).replace(/\n/g,'<br>')}</p><button type="button" class="tertiary small-btn copy-field" data-text="${esc(text)}">Copiar</button></div>` : '';
+  const variants = ad.variantes || [];
+  return `<div class="ad-view" data-ad="${g.id}"><dl class="ad-summary"><div><dt>Objetivo</dt><dd>${esc(ad.objetivo_meta || '—')}</dd></div><div><dt>Ubicaciones</dt><dd>${esc((ad.ubicaciones || []).map(label).join(' + ') || '—')}</dd></div><div><dt>Botón</dt><dd>${esc(ad.boton || '—')}</dd></div><div><dt>Precio</dt><dd>${ad.precio ? esc(ad.precio) : '<span class="muted">Sin precio · a consultar</span>'}</dd></div></dl>
+    <div class="ad-tabs" role="tablist">${variants.map((v, i) => `<button type="button" role="tab" class="ad-tab${i ? '' : ' on'}" data-variant="${i}">Variante ${esc(v.id)} <span>${esc(v.angulo)}</span></button>`).join('')}</div>
+    ${variants.map((v, i) => `<section class="ad-variant" data-variant="${i}"${i ? ' hidden' : ''}><p class="ad-code">Código <b>${esc(v.campaign_code)}</b></p>
+    ${field('Texto principal', v.texto_principal, 0)}${field('Título', v.titulo, 40)}${field('Descripción', v.descripcion, 30)}
+    ${field('Mensaje de WhatsApp', v.mensaje_whatsapp, 0)}${field('Enlace con UTM', v.url_destino, 0)}</section>`).join('')}
+    ${(ad.warnings || []).length ? `<details class="ad-notes"><summary>Indicaciones para el Administrador de anuncios (${ad.warnings.length})</summary><ul class="muted small">${ad.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></details>` : ''}</div>`;
 }
 
 async function contentGenerate() {
-  const [posts, generated, info, plans, siteStatus, toursEs, toursEn] = await Promise.all([api('/posts'),api('/generated'),api('/approved-info'),api('/plans'),api('/site/status'),api('/site/pages?lang=es&kind=tour'),api('/site/pages?lang=en&kind=tour')]); latestPosts = posts;
+  const [posts, generated, info, plans, siteStatus, toursEs, toursEn, strategy] = await Promise.all([api('/posts'),api('/generated'),api('/approved-info'),api('/plans'),api('/site/status'),api('/site/pages?lang=es&kind=tour'),api('/site/pages?lang=en&kind=tour'),api('/editorial-strategy')]); latestPosts = posts;
   const tours = [...toursEn, ...toursEs].filter(t => t.approved);
   const details = await Promise.all(plans.map(p => api('/plans/' + p.id)));
   const ideas = details.flatMap(p => p.ideas.filter(x => x.status === 'aprobada'));
@@ -399,7 +402,7 @@ async function contentGenerate() {
   $('#content-body').innerHTML = `<details class="card create-panel" id="create-panel"${openCreate ? ' open' : ''}><summary><b>＋ Crear contenido nuevo</b> <span class="muted small">Desde una idea aprobada, un brief libre o una publicación</span></summary>
     ${!info.some(x => x.autorizado_publicar) && !siteStatus.pages.approved ? '<div class="notice"><b>Antes de generar:</b> aprueba una página en Configuración → Sitio web o agrega información verificada en Biblioteca. Puedes planificar ideas desde las estadísticas entretanto.</div>' : ''}<p class="muted small">El copy se genera siempre. Los materiales adicionales son opcionales. Todo queda en revisión humana; no se publica automáticamente.</p>
     <form class="card flat form package-form" data-source="idea"><div class="full"><h3>Desde una idea del plan</h3><p class="muted">Primero aprueba la idea en Planificar contenido. Se conserva el idioma previsto y recibirás un copy para cada plataforma destino.</p></div><label>Idea aprobada<select name="plan_idea_id" required><option value="">— Elegir —</option>${ideas.map(x => `<option value="${x.id}"${x.id === selectedPlanIdeaId ? ' selected' : ''}>${esc(x.title)} · ${esc(x.platforms.map(label).join(' + '))} · ${esc(label(x.brief.idioma || 'es'))}</option>`).join('')}</select></label><label>Materiales<select name="extra">${extra}</select></label><div class="form-actions"><button class="primary" ${!ideas.length ? 'disabled' : ''}>Generar borradores</button></div></form>
-    <details class="card flat"><summary>Crear sin plan ni publicación previa</summary><form class="form package-form" data-source="brief"><p class="muted full">Describe la intención de la pieza. La IA solo podrá usar páginas aprobadas del sitio y datos de la biblioteca aprobada. Para promocionar un tour, elígelo: sus datos y su enlace se usan como fuente principal.</p><label class="full">Tour (opcional)<select name="source_url"><option value="">— Ninguno —</option>${tours.map(t => `<option value="${esc(t.url)}" data-title="${esc(t.title)}" data-lang="${esc(t.lang)}">${esc(t.title)} · ${esc(t.lang.toUpperCase())}</option>`).join('')}</select></label><label>Tema o título<input name="titulo" required></label><label>Plataforma principal<select name="plataforma" required>${opts(K.PLATAFORMAS)}</select></label><label>Objetivo comercial<select name="objetivo_negocio">${opts(K.OBJETIVOS_NEGOCIO)}</select></label><label>Objetivo de marketing<input name="objetivo_marketing" required placeholder="Ej. resolver una duda frecuente"></label><label>Propósito<select name="objetivo_contenido">${opts(K.OBJETIVOS_CONTENIDO)}</select></label><label>Audiencia<input name="audiencia" required></label><label>Etapa<select name="etapa_embudo">${opts(K.ETAPAS)}</select></label><label>CTA<input name="cta" required></label><label>Resultado que medirás<input name="metrica_principal" required placeholder="Ej. conversaciones iniciadas"></label><label>Idioma<select name="idioma">${opts(K.IDIOMAS)}</select></label><label>Materiales<select name="extra">${extra}</select></label><div class="form-actions"><button class="primary">Generar borradores</button></div></form></details>
+    <details class="card flat"><summary>Crear sin plan ni publicación previa</summary><form class="form package-form" data-source="brief"><div class="full"><p class="muted">La IA usará solo información aprobada. Si eliges un tour, sus datos y enlace serán la fuente principal.</p><p class="muted small"><b>Para empezar, completa los campos obligatorios.</b> El resto se propone automáticamente y puedes ajustarlo en opciones avanzadas.</p></div><label class="full">Tour que quieres promocionar <span class="muted">(opcional)</span><select name="source_url"><option value="">— Ninguno —</option>${tours.map(t => `<option value="${esc(t.url)}" data-title="${esc(t.title)}" data-lang="${esc(t.lang)}">${esc(t.title)} · ${esc(t.lang.toUpperCase())}</option>`).join('')}</select><small class="muted">Al elegirlo, tomaremos su título e idioma como punto de partida.</small></label><label>Tema o idea <span class="muted">(obligatorio)</span><input name="titulo" required placeholder="Ej. Cómo elegir el orden de las visitas en Cusco"><small class="muted">¿De qué quieres hablar? Si elegiste un tour, puedes dejar su título.</small></label><label>¿Dónde publicarás? <span class="muted">(obligatorio)</span><select name="plataforma" required>${opts(K.PLATAFORMAS)}</select><small class="muted">Plataforma para adaptar el copy. Se crea una versión para este canal.</small></label><label>¿Qué resultado buscas? <span class="muted">(obligatorio)</span><select name="objetivo_negocio" required>${opts(K.OBJETIVOS_NEGOCIO,'consulta_calificada')}</select><small class="muted">Elige el resultado de negocio más cercano; la IA adaptará el llamado a la acción.</small></label><label>Idioma <span class="muted">(obligatorio)</span><select name="idioma" required>${opts(K.IDIOMAS,'es')}</select></label><label>Qué quieres recibir <span class="muted">(opcional)</span><select name="extra">${extra}</select><small class="muted">El copy se incluye siempre. Elige aquí si necesitas además una imagen, carrusel o guion.</small></label><details class="full brief-advanced"><summary>Opciones avanzadas <span class="muted">(se completan con sugerencias)</span></summary><p class="muted small">Estos datos ayudan a orientar y medir la pieza. No necesitas cambiarlos salvo que tengas una preferencia concreta.</p><div class="form"><label>Enfoque de la pieza<select name="objetivo_contenido">${opts(K.OBJETIVOS_CONTENIDO,'explicar')}</select><small class="muted">¿Qué hará el contenido? Por ejemplo: explicar, comparar o responder una duda.</small></label><label>Para quién <input name="audiencia" value="${esc(strategy.secondary_audience)}"><small class="muted">Sugerido según la estrategia de Tikaymi.</small></label><label>Qué debería lograr<input name="objetivo_marketing" placeholder="Se sugerirá a partir del tema"><small class="muted">El cambio o pregunta que esta pieza busca atender.</small></label><label>Momento del viajero<select name="etapa_embudo">${opts(K.ETAPAS,'consideracion')}</select><small class="muted">Se sugiere según el resultado comercial elegido.</small></label><label>Llamado a la acción<input name="cta" placeholder="Se sugerirá según el resultado y el contacto configurado"><small class="muted">La acción concreta que invitas a realizar.</small></label><label>Qué señal observar<input name="metrica_principal" placeholder="Se sugerirá según el resultado"><small class="muted">Una señal para evaluar si avanza hacia el resultado buscado.</small></label></div></details><div class="form-actions"><button class="primary">Generar borradores</button></div></form></details>
     <details class="card flat"><summary>Usar una publicación existente como referencia (opcional)</summary><form class="form package-form" data-source="post"><label>Publicación<select name="post_id" required><option value="">— Elegir —</option>${posts.filter(p => !isPending(p)).map(p => `<option value="${p.id}">${esc(p.titulo)}</option>`).join('')}</select></label><label>Materiales<select name="extra">${extra}</select></label><label>Idioma<select name="idioma">${opts(K.IDIOMAS)}</select></label><div class="form-actions"><button class="primary">Generar borradores</button></div></form></details></details>
     <section class="generated-section"><div class="platform-head"><h2>Borradores generados</h2><span class="muted small">${generated.length} pieza${generated.length === 1 ? '' : 's'}</span></div>
     <div id="generated-states"></div>
@@ -422,7 +425,7 @@ async function contentGenerate() {
     const failed = g.visual_review?.estado === 'revision_fallida';
     const visual = g.tipo === 'imagen_unica' ? `<a class="btn secondary small-btn" href="/imagen-unica.html?id=${g.id}" target="_blank">Revisar y descargar PNG</a>` : g.tipo === 'carrusel' ? `<a class="btn secondary small-btn" href="/constructor/${encodeURIComponent('Tikaymi - Constructor de Carruseles.html')}?id=${g.id}" target="_blank">Revisar y exportar carrusel</a>` : '';
     return `<details class="card generated-card" data-gen="${g.id}"${g.id === openGeneratedId ? ' open' : ''}><summary><span class="gen-main"><span class="gen-line"><b>${esc(label(g.tipo))}</b>${g.plataforma ? ` · ${esc(label(g.plataforma))}` : ''} · ${esc((g.idioma || '').toUpperCase())} · <span class="muted">#${g.id} · ${esc(shortDate(g.created_at))}</span></span><span class="gen-snippet">${esc(snippet(g))}</span></span><span class="badge ${STATE_CLASS[g.estado] || ''}">${failed ? 'Composición fallida · requiere revisión' : esc(label(g.estado))}</span></summary>
-      ${failed ? `<p class="notice">${esc(g.visual_review.errors.join(' · '))}</p>` : ''}${pendingBox(g)}${g.tipo === 'anuncio_meta' ? adView(g) : `<pre>${esc(g.contenido)}</pre>`}
+      <div class="gen-body">${failed ? `<p class="notice">${esc(g.visual_review.errors.join(' · '))}</p>` : ''}${pendingBox(g)}${g.tipo === 'anuncio_meta' ? adView(g) : `<pre>${esc(g.contenido)}</pre>`}</div>
       <div class="form-actions gen-actions"><span class="action-group">${g.estado !== 'aprobado' ? `<button class="primary small-btn gen-state" data-id="${g.id}" data-state="aprobado">Aprobar</button>` : ''}${g.estado !== 'rechazado' ? `<button class="secondary small-btn gen-state" data-id="${g.id}" data-state="rechazado">Rechazar</button>` : ''}${visual}${g.tipo === 'carrusel' && g.estado === 'aprobado' ? `<button class="secondary small-btn download-gen" data-id="${g.id}">Descargar para el constructor</button>` : ''}</span>
       <span class="action-group">${['copy','guion','prompt_flow','whatsapp','anuncio_meta'].includes(g.tipo) ? `<button class="tertiary small-btn gen-edit" data-id="${g.id}">Editar texto</button>` : ''}<button class="tertiary small-btn copy-gen" data-id="${g.id}">Copiar</button><button class="tertiary small-btn gen-regenerate" data-id="${g.id}">Regenerar parte</button><button class="tertiary small-btn gen-feedback" data-id="${g.id}">Feedback</button><button class="tertiary small-btn gen-history" data-id="${g.id}">Historial</button></span></div></details>`;
   };
@@ -456,6 +459,7 @@ async function contentGenerate() {
       form.querySelector('.gen-edit-cancel').onclick = () => go('contenido','generar');
       form.onsubmit = guard(async e => { e.preventDefault(); await api('/generated/'+item.id+'/edit','PUT',{ ...formData(form), segmento:'pieza' }); toast('Corrección guardada; vuelve a revisión'); go('contenido','generar'); });
     });
+    document.querySelectorAll('.ad-tab').forEach(b => b.onclick = () => { const view = b.closest('.ad-view'); view.querySelectorAll('.ad-tab').forEach(x => x.classList.toggle('on', x === b)); view.querySelectorAll('.ad-variant').forEach(x => x.hidden = x.dataset.variant !== b.dataset.variant); });
     document.querySelectorAll('.copy-field').forEach(b => b.onclick = guard(async () => { await navigator.clipboard.writeText(b.dataset.text); toast('Campo copiado'); }));
     document.querySelectorAll('.copy-gen').forEach(b => b.onclick = guard(async () => { const item=generated.find(x=>String(x.id)===b.dataset.id); await navigator.clipboard.writeText(item.contenido); toast('Contenido copiado'); }));
     document.querySelectorAll('.gen-feedback').forEach(b => b.onclick = guard(async () => { const motivo = prompt('¿Qué debe corregirse?'); if (!motivo) return; await api('/generated/'+b.dataset.id+'/feedback','POST',{ motivo }); toast('Feedback guardado'); }));
@@ -478,7 +482,15 @@ async function contentGenerate() {
     });
     $('#content-body').appendChild(section);
   }
-  const typeSelect=$('#generated-type');
+  // Precio opcional solo para anuncios: lo escribe una persona y el servidor lo coloca en textos y diseño.
+  document.querySelectorAll('.package-form').forEach(form => {
+    const select = form.querySelector('select[name="extra"]');
+    const priceLabel = document.createElement('label'); priceLabel.className = 'ad-price-field'; priceLabel.hidden = true;
+    priceLabel.innerHTML = 'Precio a mostrar (opcional)<input name="precio" maxlength="40" placeholder="Ej. Desde USD 890 por persona"><small class="muted">Solo si Tikaymi lo confirmó. Aparece en la imagen o en la ficha del carrusel, y la IA puede citarlo literal. Vacío = «a consultar».</small>';
+    select.closest('label').after(priceLabel);
+    const toggle = () => { priceLabel.hidden = !String(select.value).startsWith('anuncio_meta'); };
+    select.addEventListener('change', toggle); toggle();
+  });
   document.querySelectorAll('.package-form select[name="extra"]').forEach(select=>{
     select.closest('label').firstChild.textContent='Formato ';
     const hint=document.createElement('p'); hint.className='muted small';
@@ -506,14 +518,56 @@ async function contentGenerate() {
     if (!form.titulo.value.trim()) form.titulo.value = option.dataset.title;
     form.idioma.value = option.dataset.lang;
   });
+  const briefForm = document.querySelector('.package-form[data-source="brief"]');
+  if (briefForm) {
+    const lang = briefForm.elements.idioma, audience = briefForm.elements.audiencia;
+    const syncAudience = () => { if (!audience.dataset.edited) audience.value = lang.value === 'en' ? strategy.primary_audience : strategy.secondary_audience; };
+    lang.addEventListener('change', syncAudience);
+    audience.addEventListener('input', () => { audience.dataset.edited = '1'; });
+    tourSelect?.addEventListener('change', syncAudience);
+    const stageFor = { consulta_calificada:'consulta', cotizacion:'cotizacion', reserva:'reserva', reconocimiento:'alcance', confianza:'consideracion', seguimiento:'interaccion' };
+    const metricFor = { consulta_calificada:'consultas calificadas o conversaciones iniciadas', cotizacion:'solicitudes de cotización', reserva:'reservas confirmadas', reconocimiento:'alcance y personas alcanzadas', confianza:'guardados, respuestas y consultas', seguimiento:'respuestas y conversaciones reanudadas' };
+    const goal = briefForm.elements.objetivo_negocio;
+    const updateSuggestions = () => {
+      const stage = briefForm.elements.etapa_embudo;
+      if (!stage.dataset.edited) stage.value = stageFor[goal.value] || 'consideracion';
+      const metric = briefForm.elements.metrica_principal;
+      if (!metric.dataset.edited) metric.value = metricFor[goal.value] || 'consultas calificadas';
+      const cta = briefForm.elements.cta;
+      if (!cta.dataset.edited) cta.value = lang.value === 'en'
+        ? `Message ${strategy.contact_name} with your travel dates and number of travelers`
+        : `Escribe a ${strategy.contact_name} con tus fechas y número de viajeros`;
+      const marketing = briefForm.elements.objetivo_marketing;
+      if (!marketing.dataset.edited && briefForm.elements.titulo.value.trim()) marketing.value = `Presentar ${briefForm.elements.titulo.value.trim()} de forma clara y ayudar al viajero a decidir su siguiente paso`;
+    };
+    briefForm.elements.etapa_embudo.addEventListener('change', e => { e.currentTarget.dataset.edited = '1'; });
+    briefForm.elements.metrica_principal.addEventListener('input', e => { e.currentTarget.dataset.edited = '1'; });
+    briefForm.elements.cta.addEventListener('input', e => { e.currentTarget.dataset.edited = '1'; });
+    briefForm.elements.objetivo_marketing.addEventListener('input', e => { e.currentTarget.dataset.edited = '1'; });
+    briefForm.elements.titulo.addEventListener('input', updateSuggestions);
+    goal.addEventListener('change', updateSuggestions); lang.addEventListener('change', updateSuggestions); updateSuggestions(); syncAudience();
+  }
   document.querySelectorAll('.package-form').forEach(f => f.onsubmit = guard(async e => {
     e.preventDefault(); const d = formData(f); const source = f.dataset.source;
     const input = { idioma:d.idioma, extra:d.extra || null };
     if (d.extra === 'anuncio_meta_carrusel') { input.extra = 'anuncio_meta'; input.ad_visual = 'carrusel'; }
     if (!d.source_url) delete d.source_url;
+    if (input.extra === 'anuncio_meta' && d.precio) input.precio = d.precio;
+    delete d.precio;
     if (source === 'idea') input.plan_idea_id = Number(d.plan_idea_id);
     else if (source === 'post') input.post_id = Number(d.post_id);
-    else { delete d.extra; input.brief = d; }
+    else {
+      delete d.extra;
+      const stages = { consulta_calificada:'consulta', cotizacion:'cotizacion', reserva:'reserva', reconocimiento:'alcance', confianza:'consideracion', seguimiento:'interaccion' };
+      const metrics = { consulta_calificada:'consultas calificadas o conversaciones iniciadas', cotizacion:'solicitudes de cotización', reserva:'reservas confirmadas', reconocimiento:'alcance y personas alcanzadas', confianza:'guardados, respuestas y consultas', seguimiento:'respuestas y conversaciones reanudadas' };
+      d.objetivo_contenido ||= 'explicar';
+      d.audiencia ||= d.idioma === 'en' ? strategy.primary_audience : strategy.secondary_audience;
+      d.etapa_embudo ||= stages[d.objetivo_negocio] || 'consideracion';
+      d.cta ||= d.idioma === 'en' ? `Message ${strategy.contact_name} with your travel dates and number of travelers` : `Escribe a ${strategy.contact_name} con tus fechas y número de viajeros`;
+      d.metrica_principal ||= metrics[d.objetivo_negocio] || 'consultas calificadas';
+      d.objetivo_marketing ||= `Presentar ${d.titulo} de forma clara y ayudar al viajero a decidir su siguiente paso`;
+      input.brief = d;
+    }
     const b = f.querySelector('button'); b.disabled = true;
     try { await api('/generate-package','POST',input); toast(input.extra === 'anuncio_meta' ? 'Visual y textos de anuncio generados; revisa antes de aprobar' : 'Copy y materiales generados; revisa antes de aprobar'); go('contenido','generar'); }
     finally { b.disabled = false; }
@@ -565,12 +619,20 @@ async function siteView() {
     <div class="card form"><label>Idioma<select id="site-lang"><option value="es"${siteLang === 'es' ? ' selected' : ''}>Español</option><option value="en"${siteLang === 'en' ? ' selected' : ''}>Inglés</option></select></label><label>Tipo<select id="site-kind"><option value="">Todos</option>${['tour','blog','evento','destino','institucional'].map(k => `<option value="${k}"${siteKind === k ? ' selected' : ''}>${esc(label(k))}</option>`).join('')}</select></label></div>
     <p class="muted small">Aprobar una página autoriza sus datos para borradores relacionados. Si cambia en una actualización posterior, la aprobación se retira automáticamente hasta que vuelvas a revisarla.</p>
     <div class="card form"><div class="form-actions"><button type="button" class="secondary" id="site-select-all">Seleccionar todas las páginas visibles</button><button type="button" class="primary" id="site-approve-selected">Aprobar seleccionadas</button><button type="button" class="secondary" id="site-approve-tours-blogs">Aprobar todos los tours y blogs (ES + EN)</button></div><p class="muted small">La aprobación por lote solo afecta la copia local activa; no publica ni modifica tu sitio.</p></div>
-    ${pages.map(p => `<details class="card"><summary><input type="checkbox" class="site-select" data-url="${esc(p.url)}" aria-label="Seleccionar ${esc(p.title)}"> ${esc(p.title)} · ${esc(label(p.kind))} ${p.approved ? '✓ Aprobada' : p.changed_at ? '· Cambió: revisar' : '· Pendiente'}</summary><p class="muted small">${esc(p.description || p.excerpt || '')}</p><p><a href="${esc(p.url)}" target="_blank" rel="noopener">Ver página original ↗</a></p><p class="muted small">Descargada: ${esc(p.fetched_at)}${p.sitemap_lastmod ? ' · Última modificación declarada: ' + esc(p.sitemap_lastmod) : ''}</p><label class="check"><input type="checkbox" class="site-approve" data-url="${esc(p.url)}"${p.approved ? ' checked' : ''}> Aprobada para redactar contenido</label></details>`).join('') || empty('□','Sin páginas guardadas','Pulsa Actualizar desde Tikaymi.com para crear la primera copia local.')}`;
+    ${pages.map(p => `<article class="card site-page-card"><div class="site-page-card-head"><label class="check"><input type="checkbox" class="site-select" data-url="${esc(p.url)}" aria-label="Seleccionar ${esc(p.title)}"> <b>${esc(p.title)}</b></label><span class="badge ${p.approved ? 'success' : 'warn'}">${esc(label(p.kind))} · ${p.approved ? 'Aprobada' : p.changed_at ? 'Cambió: revisar' : 'Pendiente'}</span><button type="button" class="secondary small-btn site-refresh" data-url="${esc(p.url)}">Actualizar esta página</button></div><details><summary>Ver fuente y estado de revisión</summary><p class="muted small">${esc(p.description || p.excerpt || '')}</p><p><a href="${esc(p.url)}" target="_blank" rel="noopener">Ver página original ↗</a></p><p class="muted small">Descargada: ${esc(p.fetched_at)}${p.sitemap_lastmod ? ' · Última modificación declarada: ' + esc(p.sitemap_lastmod) : ''}</p><label class="check"><input type="checkbox" class="site-approve" data-url="${esc(p.url)}"${p.approved ? ' checked' : ''}> Aprobada para redactar contenido</label></details></article>`).join('') || empty('□','Sin páginas guardadas','Pulsa Actualizar desde Tikaymi.com para crear la primera copia local.')}`;
   $('#site-sync').onclick = guard(async () => {
     const b = $('#site-sync'); b.disabled = true; b.textContent = 'Actualizando…';
     try { const r = await api('/site/sync','POST',{}); toast(`${r.created} nuevas, ${r.changed} cambiadas, ${r.failed} fallidas`); go('configuracion','sitio'); }
     finally { b.disabled = false; b.textContent = 'Actualizar desde Tikaymi.com'; }
   });
+  document.querySelectorAll('.site-refresh').forEach(button => button.onclick = guard(async () => {
+    const original=button.textContent;button.disabled=true;button.textContent='Actualizando…';
+    try {
+      const result=await api('/site/pages/refresh','POST',{url:button.dataset.url});
+      toast(result.changed ? 'Página actualizada; revisa y aprueba el nuevo contenido.' : 'La página no cambió; se conservó su aprobación.');
+      go('configuracion','sitio');
+    } finally { button.disabled=false;button.textContent=original; }
+  }));
   $('#site-lang').onchange = e => { siteLang = e.target.value; go('configuracion','sitio'); };
   $('#site-kind').onchange = e => { siteKind = e.target.value; go('configuracion','sitio'); };
   $('#site-select-all').onclick = () => document.querySelectorAll('.site-select').forEach(x => { x.checked = true; });
@@ -592,18 +654,36 @@ async function siteView() {
 }
 async function libraryView() {
   const [info,assets]=await Promise.all([api('/approved-info'),api('/assets')]);
-  $('#config-body').innerHTML=`<div class="notice info"><b>Fuente de verdad:</b> el asistente solo puede usar esta información autorizada o páginas aprobadas en Sitio web. Nunca debe inventar precios, servicios o testimonios.</div><div class="grid cols-2"><section><form class="card form" id="info-form"><div class="full"><h3>Información verificada</h3></div><label>Tipo<select name="tipo">${opts(K.INFO_TIPOS)}</select></label><label>Título<input name="titulo" required></label><label class="full">Contenido<textarea name="texto" rows="3" required></textarea></label><label>Fuente<input name="fuente" placeholder="Documento, persona o URL"></label><label class="check"><input type="checkbox" name="autorizado_publicar"> Autorizada para publicar</label><div class="form-actions"><button class="primary">Agregar información</button></div></form>${info.map(i=>`<article class="card"><div class="platform-head"><b>${esc(i.titulo)}</b><span class="badge">${esc(label(i.tipo))}</span></div><p>${esc(i.texto)}</p><label class="check"><input class="info-auth" data-id="${i.id}" type="checkbox"${i.autorizado_publicar?' checked':''}> Autorizada para publicar</label><button class="tertiary small-btn delete-info" data-id="${i.id}">Eliminar</button></article>`).join('')}</section><section><form class="card form" id="asset-form"><div class="full"><h3>Fotos y videos reales</h3><p class="muted">Opcional: puedes pegar fotos de res.cloudinary.com/tikaymi directamente en la imagen única o el carrusel; al guardarlas aparecen aquí como autorizadas. Desmarca la autorización para impedir que una foto vuelva a usarse.</p></div><label>Tipo<select name="tipo">${opts(K.ASSET_TIPOS)}</select></label><label>URL<input name="url" type="url" required></label><label>Descripción<input name="descripcion"></label><label>Destino o uso<input name="destino" placeholder="Machu Picchu, reels…"></label><div class="form-actions"><button class="primary">Agregar recurso</button></div></form>${assets.map(a=>`<article class="card"><div class="platform-head"><b>${esc(a.descripcion||a.tipo)}</b><span class="badge">${esc(label(a.tipo))}</span></div><p class="muted small" style="word-break:break-all">${esc(a.url)}</p><button class="tertiary small-btn delete-asset" data-id="${a.id}">Eliminar</button></article>`).join('')}</section></div>`;
+  const authLabel = (on, text) => `<span class="badge ${on ? 'success' : 'warn'}">${on ? text : 'Sin autorizar'}</span>`;
+  const infoCard = i => `<article class="card lib-item" data-kind="info" data-id="${i.id}"><div class="platform-head"><b>${esc(i.titulo)}</b><span><span class="badge">${esc(label(i.tipo))}</span> ${authLabel(i.autorizado_publicar, 'Autorizada')}</span></div><p class="lib-text">${esc(i.texto)}</p>${i.fuente ? `<p class="muted small">Fuente: ${esc(i.fuente)}</p>` : ''}<div class="lib-actions"><label class="check small"><input type="checkbox" class="lib-auth"${i.autorizado_publicar ? ' checked' : ''}> Autorizada para publicar</label><button class="secondary small-btn lib-edit">Editar</button><button class="tertiary small-btn delete-info" data-id="${i.id}">Eliminar</button></div></article>`;
+  const assetCard = a => `<article class="card lib-item" data-kind="asset" data-id="${a.id}"><div class="lib-asset">${a.tipo === 'foto' ? `<img class="lib-thumb" src="${esc(a.url)}" alt="" loading="lazy">` : '<span class="lib-thumb lib-thumb-video">▶</span>'}<div class="lib-asset-main"><div class="platform-head"><b>${esc(a.descripcion || label(a.tipo))}</b><span><span class="badge">${esc(label(a.tipo))}</span> ${authLabel(a.autorizado_publicar, 'Autorizado')}</span></div>${a.destino ? `<p class="small">Destino o uso: ${esc(a.destino)}</p>` : ''}<p class="muted small lib-url">${esc(a.url)}</p></div></div><div class="lib-actions"><label class="check small"><input type="checkbox" class="lib-auth"${a.autorizado_publicar ? ' checked' : ''}> Autorizado para publicación</label><button class="secondary small-btn lib-edit">Editar</button><button class="tertiary small-btn delete-asset" data-id="${a.id}">Eliminar</button></div></article>`;
+  $('#config-body').innerHTML=`<div class="notice info"><b>Fuente de verdad:</b> el asistente solo puede usar esta información autorizada o páginas aprobadas en Sitio web. Nunca debe inventar precios, servicios o testimonios.</div><div class="grid cols-2"><section><form class="card form" id="info-form"><div class="full"><h3>Información verificada</h3></div><label>Tipo<select name="tipo">${opts(K.INFO_TIPOS)}</select></label><label>Título<input name="titulo" required></label><label class="full">Contenido<textarea name="texto" rows="3" required></textarea></label><label>Fuente<input name="fuente" placeholder="Documento, persona o URL"></label><label class="check"><input type="checkbox" name="autorizado_publicar"> Autorizada para publicar</label><div class="form-actions"><button class="primary">Agregar información</button></div></form>${info.map(infoCard).join('')}</section><section><form class="card form" id="asset-form"><div class="full"><h3>Fotos y videos reales</h3><p class="muted">Opcional: puedes pegar fotos de res.cloudinary.com/tikaymi directamente en la imagen única o el carrusel; al guardarlas aparecen aquí como autorizadas. Desmarca la autorización para impedir que una foto vuelva a usarse.</p></div><label>Tipo<select name="tipo">${opts(K.ASSET_TIPOS)}</select></label><label>URL<input name="url" type="url" required></label><label>Descripción<input name="descripcion"></label><label>Destino o uso<input name="destino" placeholder="Machu Picchu, reels…"></label><label class="check full"><input type="checkbox" name="autorizado_publicar"> Fotografía/video autorizado para publicación</label><div class="form-actions"><button class="primary">Agregar recurso</button></div></form>${assets.map(assetCard).join('')}</section></div>`;
   $('#info-form').onsubmit=guard(async e=>{e.preventDefault();const d=formData(e.target);d.autorizado_publicar=e.target.autorizado_publicar.checked;await api('/approved-info','POST',d);toast('Información agregada');go('configuracion','biblioteca');});
   $('#asset-form').onsubmit=guard(async e=>{e.preventDefault();const data=formData(e.target);data.autorizado_publicar=e.target.autorizado_publicar.checked;await api('/assets','POST',data);toast('Recurso agregado');go('configuracion','biblioteca');});
-  const assetApproval=document.createElement('label');assetApproval.className='check full';assetApproval.innerHTML='<input type="checkbox" name="autorizado_publicar"> Fotografía/video autorizado para publicación';$('#asset-form').appendChild(assetApproval);
-  document.querySelectorAll('.delete-asset').forEach(button=>{
-    const asset=assets.find(x=>String(x.id)===button.dataset.id);
-    const label=document.createElement('label');label.className='check';
-    const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=!!asset.autorizado_publicar;
-    checkbox.onchange=guard(async()=>{await api('/assets/'+asset.id+'/approve','PUT',{autorizado_publicar:checkbox.checked});toast('Autorización actualizada');});
-    label.append(checkbox,document.createTextNode(' Autorizado para publicación'));button.parentNode.insertBefore(label,button);
+  // Edición en la misma tarjeta. La URL de un recurso no se edita: identifica su autorización.
+  document.querySelectorAll('.lib-edit').forEach(b => b.onclick = () => {
+    const card = b.closest('.lib-item'), id = Number(card.dataset.id), isInfo = card.dataset.kind === 'info';
+    const item = (isInfo ? info : assets).find(x => x.id === id);
+    const form = document.createElement('form'); form.className = 'form lib-form';
+    form.innerHTML = isInfo
+      ? `<label>Tipo<select name="tipo">${opts(K.INFO_TIPOS, item.tipo)}</select></label><label>Título<input name="titulo" value="${esc(item.titulo)}" required></label><label class="full">Contenido<textarea name="texto" rows="5" required>${esc(item.texto)}</textarea></label><label class="full">Fuente<input name="fuente" value="${esc(item.fuente || '')}" placeholder="Documento, persona o URL"></label><label class="check full"><input type="checkbox" name="autorizado_publicar"${item.autorizado_publicar ? ' checked' : ''}> Autorizada para publicar</label>`
+      : `<label>Tipo<select name="tipo">${opts(K.ASSET_TIPOS, item.tipo)}</select></label><label>Descripción<input name="descripcion" value="${esc(item.descripcion || '')}"></label><label class="full">Destino o uso<input name="destino" value="${esc(item.destino || '')}" placeholder="Machu Picchu, reels…"></label><p class="muted small full lib-url">URL (no editable): ${esc(item.url)}</p><label class="check full"><input type="checkbox" name="autorizado_publicar"${item.autorizado_publicar ? ' checked' : ''}> Autorizado para publicación</label>`;
+    form.innerHTML += '<div class="form-actions"><button class="primary small-btn">Guardar cambios</button><button type="button" class="tertiary small-btn lib-cancel">Cancelar</button></div>';
+    card.replaceChildren(form);
+    form.querySelector('input,textarea').focus();
+    form.querySelector('.lib-cancel').onclick = () => go('configuracion','biblioteca');
+    form.onsubmit = guard(async e => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(form)); d.autorizado_publicar = form.autorizado_publicar.checked;
+      await api((isInfo ? '/approved-info/' : '/assets/') + id, 'PUT', d);
+      toast('Biblioteca actualizada'); go('configuracion','biblioteca');
+    });
   });
-  document.querySelectorAll('.info-auth').forEach(x=>x.onchange=guard(async()=>{await api('/approved-info/'+x.dataset.id,'PUT',{autorizado_publicar:x.checked});toast('Autorización actualizada');}));
+  document.querySelectorAll('.lib-auth').forEach(x => x.onchange = guard(async () => {
+    const card = x.closest('.lib-item');
+    try { await api((card.dataset.kind === 'info' ? '/approved-info/' : '/assets/') + card.dataset.id, 'PUT', { autorizado_publicar:x.checked }); toast('Autorización actualizada'); go('configuracion','biblioteca'); }
+    catch (e) { x.checked = !x.checked; throw e; }
+  }));
   document.querySelectorAll('.delete-info').forEach(b=>b.onclick=guard(async()=>{if(confirm('¿Eliminar esta información?')){await api('/approved-info/'+b.dataset.id,'DELETE');go('configuracion','biblioteca');}}));
   document.querySelectorAll('.delete-asset').forEach(b=>b.onclick=guard(async()=>{if(confirm('¿Eliminar este recurso?')){await api('/assets/'+b.dataset.id,'DELETE');go('configuracion','biblioteca');}}));
 }

@@ -54,6 +54,22 @@ function validate(x, { idioma, sourcesText = null, ready = false } = {}) {
   return { ok:!errors.length, errors, warnings };
 }
 
+// Precio opcional escrito por una persona al crear el anuncio: es su autorización para esta pieza.
+// Debe ser una cifra con moneda, breve y sin lenguaje de descuento. El servidor lo coloca; la IA no lo redacta.
+const PRICE_MAX = 40;
+function normalizePrice(value) {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (!text) return null;
+  const bad = m => { throw Object.assign(new Error(`Precio: ${m}`), { status:400 }); };
+  if (text.length > PRICE_MAX) bad(`máximo ${PRICE_MAX} caracteres (ej. «Desde USD 890 por persona»)`);
+  if (text.split(' ').length > 8) bad('máximo 8 palabras');
+  if (!new RegExp(PRICE.source, 'i').test(text)) bad('incluye la cifra con su moneda (ej. USD 890, S/ 1200)');
+  for (const [rule, message] of BANNED) if (rule.test(text)) bad(message);
+  return text;
+}
+// Con precio confirmado, el pendiente «precio» que declare la IA ya no aplica.
+const withoutPricePending = (pending, price) => price ? pending.filter(x => !/precio|price|tarifa|rate|cost/i.test(x)) : pending;
+
 // Siguiente base libre por idioma: ADEN001, ADEN002… Se lee de los anuncios ya guardados.
 function nextBase(db, idioma) {
   const prefix = `AD${String(idioma).toUpperCase()}`;
@@ -83,7 +99,7 @@ function whatsappMessage(idioma, product, code, name) {
 }
 
 // Completa lo que no decide la IA. Idempotente para una misma base: regenerar conserva los códigos.
-function finalize(x, { base, tour, contactName = 'Deicy' }) {
+function finalize(x, { base, tour, contactName = 'Deicy', precio = null }) {
   const product = tour?.title || x.producto || 'Tikaymi';
   const variantes = x.variantes.map((v, i) => {
     const code = `${base}${LETTERS[i]}`;
@@ -93,9 +109,9 @@ function finalize(x, { base, tour, contactName = 'Deicy' }) {
       campaign_code:code, mensaje_whatsapp:whatsappMessage(x.idioma, product, code, String(contactName).trim().split(/\s+/)[0] || 'Deicy'),
       url_destino:destinationUrl(tour?.url, base, LETTERS[i]) };
   });
-  const pending = [...new Set([...(x.pending || []), ...(tour?.url ? [] : ['[FALTA DATO: página del tour en tikaymi.com para el enlace «Más información»; elige un tour aprobado en el brief]'])])];
+  const pending = [...new Set([...withoutPricePending(x.pending || [], precio), ...(tour?.url ? [] : ['[FALTA DATO: página del tour en tikaymi.com para el enlace «Más información»; elige un tour aprobado en el brief]'])])];
   return { format:'anuncio_meta', version:1, idioma:x.idioma, producto:product, codigo_base:base,
-    objetivo_meta:'Mensajes (Click to WhatsApp)', ubicaciones:['facebook', 'instagram'], boton:BUTTON[x.idioma],
+    precio, objetivo_meta:'Mensajes (Click to WhatsApp)', ubicaciones:['facebook', 'instagram'], boton:BUTTON[x.idioma],
     variantes, pending, warnings:[...(x.warnings || []),
       'Crea un anuncio por variante dentro del mismo conjunto de anuncios y pega su mensaje precargado en «Mensaje predeterminado»; así cada consulta llega con su código.',
       'Registra cada consulta en Consultas con su código: sin lead atribuido no hay evidencia de conversión.'] };
@@ -110,4 +126,4 @@ const INSTRUCTIONS = [
   'Si falta un dato que el anuncio necesitaba, no lo escribas en los textos: anótalo en "pending" con el formato [FALTA DATO: ...]. Los códigos de campaña, el botón, el mensaje de WhatsApp y el enlace los añade el sistema.',
 ].join('\n');
 
-module.exports = { LIMITS, SOFT, BUTTON, INSTRUCTIONS, validate, finalize, nextBase, destinationUrl };
+module.exports = { LIMITS, SOFT, BUTTON, INSTRUCTIONS, validate, finalize, nextBase, destinationUrl, normalizePrice, withoutPricePending };

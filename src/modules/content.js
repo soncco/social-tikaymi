@@ -265,6 +265,21 @@ function parseVideoParts(text) {
 // Texto de las fuentes aprobadas usadas en la pieza: permite comprobar que una cifra no es inventada.
 const sourcesText = context => [...context.info.map(i => `${i.titulo} ${i.texto}`), ...context.pages.map(p => `${p.title} ${p.description || ''} ${p.body_text || ''}`)].join('\n');
 
+// Fila de precio en la lámina «ficha» del carrusel producto. Sin ficha no hay un lugar
+// del diseño para el precio: se informa como pendiente en vez de inventar una lámina.
+function carouselPrice(exported, price, lang) {
+  const key = lang === 'en' ? 'Price' : 'Precio';
+  const ficha = exported.slides.find(s => s.layout === 'ficha');
+  if (!ficha) return [`[FALTA DATO: el carrusel no tiene lámina «ficha»; el precio ${price} no aparece en el diseño. Regenera como carrusel de producto o añádelo en el constructor]`];
+  const meta = Array.isArray(ficha.data.meta) ? ficha.data.meta.filter(m => m && typeof m === 'object') : [];
+  const row = meta.find(m => /precio|price/i.test(String(m.k || '')));
+  if (row) row.v = price;
+  else if (meta.length < 4) meta.push({ k:key, v:price });
+  else meta[meta.length - 1] = { k:key, v:price };
+  ficha.data.meta = meta;
+  return [];
+}
+
 // Página de destino del anuncio: el tour elegido en el brief o, si no, el tour aprobado más relacionado en el idioma.
 function adTour(db, post, context, lang) {
   if (post.source_url) {
@@ -280,10 +295,10 @@ const packageBrief = post => ({
   objetivo_negocio: post.objetivo_negocio, objetivo_marketing: post.objetivo_marketing,
   objetivo_contenido: post.objetivo_contenido, audiencia: post.audiencia, etapa_embudo: post.etapa_embudo,
   cta: post.cta, metrica_principal: post.metrica_principal, idioma: post.idioma, formato: post.formato || null,
-  source_url: post.source_url || null,
+  source_url: post.source_url || null, precio: post.precio || null,
 });
 
-async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, strict = false, repair_feedback, analysis_filters, platform_override, ad_base } = {}, { fetchImpl, save = true, package_id = null, repair = true } = {}) {
+async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, strict = false, repair_feedback, analysis_filters, platform_override, ad_base, precio } = {}, { fetchImpl, save = true, package_id = null, repair = true } = {}) {
   if (['imagen_unica','carrusel'].includes(tipo)) strict = true;
   if (!C.CONTENIDO_TIPOS.includes(tipo)) throw err(400, `tipo inválido: ${tipo}. Válidos: ${C.CONTENIDO_TIPOS.join(', ')}`);
   const idea = plan_idea_id ? db.prepare('SELECT i.*,p.filtros_json FROM plan_ideas i JOIN editorial_plans p ON p.id=i.plan_id WHERE i.id=?').get(plan_idea_id) : null;
@@ -308,6 +323,11 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source
   // (b) Prompt con información aprobada + recursos + análisis; 422 si no hay info aprobada.
   const filtros = analysis_filters || JSON.parse(idea?.filtros_json || '{}');
   const partes = buildPrompt(db, { post, tipo, idioma: lang, sourceContent: source_content, videoConfig: video_config, repairFeedback: repair_feedback, analysisFilters: filtros });
+  // Precio de anuncio: lo escribió una persona; el servidor lo coloca en el diseño y la IA solo puede citarlo literal.
+  const price = ['imagen_unica', 'carrusel', 'anuncio_meta'].includes(tipo) ? ads.normalizePrice(precio) : null;
+  if (price) partes.prompt += tipo === 'anuncio_meta'
+    ? `\nPrecio confirmado por Tikaymi para esta pieza: «${price}». Puedes citarlo literal en una variante como máximo; no lo modifiques, no lo conviertas ni lo presentes como oferta. No lo anotes en "pending".`
+    : `\nPrecio confirmado por Tikaymi: «${price}». No lo escribas en los textos: el sistema lo coloca en el diseño.${tipo === 'carrusel' ? ' Usa tipo "producto" e incluye una lámina "ficha" con meta [{k,v}] (duración, servicio…); el sistema añade la fila de precio.' : ''} No lo anotes en "pending".`;
   if (tipo === 'copy') partes.prompt += `\nPlataforma única de esta salida: ${post.plataforma}. ${({ instagram:'Gancho breve, párrafos cortos y CTA contextual. Termina con una línea de 4–6 hashtags pertinentes (destino, tipo de viaje, Perú).', facebook:'Contexto útil, tono conversacional y enlace/CTA cuando esté aprobado. Termina con una línea de 2–3 hashtags.', tiktok:'Descripción concisa conectada al video. Termina con una línea de 3–5 hashtags pertinentes.', youtube_shorts:'Descripción breve y contexto del Short; evita referencias a otras redes. Termina con 2–3 hashtags, incluido #Shorts.' })[post.plataforma]}`;
 
   // (c) Llamada a la API de Anthropic.
@@ -328,27 +348,28 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source
     const context = selectContext(db, post);
     const validation = visualContract.validateSingle(json, { resources:context.resources.filter(x=>x.tipo==='foto').map(x=>x.url), testimonials:context.info.filter(x=>x.tipo==='testimonio').map(x=>x.texto), attributions:context.info.filter(x=>x.tipo==='testimonio').map(x=>x.titulo) });
     if(json?.plataforma!==post.plataforma || json?.idioma!==lang){validation.errors.push('plataforma/idioma: deben coincidir con el destino y el idioma elegidos');validation.ok=false;}
-    if (!validation.ok && repair && !repair_feedback) return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, analysis_filters, platform_override, video_config, strict, repair_feedback:`${validation.errors.join('; ')}\nRespuesta fallida: ${texto}` }, { fetchImpl, save, package_id, repair:false });
+    if (!validation.ok && repair && !repair_feedback) return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, analysis_filters, platform_override, video_config, strict, precio, repair_feedback:`${validation.errors.join('; ')}\nRespuesta fallida: ${texto}` }, { fetchImpl, save, package_id, repair:false });
     if (!validation.ok) {
       db.prepare('INSERT INTO failed_visual_reviews(tipo,contenido,errors_json) VALUES(?,?,?)').run(tipo,texto,JSON.stringify(validation.errors));
       throw err(502, `Imagen única inválida: ${validation.errors.join('; ')}. Guardada como revisión fallida.`);
     }
     json.plataforma = post.plataforma; json.idioma = lang;
-    json.pending = [...new Set(validation.pending)];
+    if (price) json.visual.price = price; else delete json.visual.price;
+    json.pending = ads.withoutPricePending([...new Set(validation.pending)], price);
     contenido = JSON.stringify(json, null, 2);
   } else if (tipo === 'anuncio_meta') {
     let json;
     try { json = JSON.parse(quitarCercas(texto)); } catch { json=null; }
     const context = selectContext(db, post);
-    const validation = ads.validate(json, { idioma:lang, sourcesText:sourcesText(context) });
-    if (!validation.ok && repair && !repair_feedback) return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, analysis_filters, platform_override, ad_base, repair_feedback:`${validation.errors.join('; ')}\nRespuesta fallida: ${texto}` }, { fetchImpl, save, package_id, repair:false });
+    const validation = ads.validate(json, { idioma:lang, sourcesText:`${sourcesText(context)}\n${price || ''}` });
+    if (!validation.ok && repair && !repair_feedback) return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, analysis_filters, platform_override, ad_base, precio, repair_feedback:`${validation.errors.join('; ')}\nRespuesta fallida: ${texto}` }, { fetchImpl, save, package_id, repair:false });
     if (!validation.ok) {
       db.prepare('INSERT INTO failed_visual_reviews(tipo,contenido,errors_json) VALUES(?,?,?)').run(tipo,texto,JSON.stringify(validation.errors));
       throw err(502, `Anuncio inválido: ${validation.errors.join('; ')}. Guardado como revisión fallida.`);
     }
     const strategy = editorialStrategy.get(db);
     json.warnings = [...(Array.isArray(json.warnings) ? json.warnings : []), ...validation.warnings];
-    contenido = JSON.stringify(ads.finalize(json, { base:ad_base || ads.nextBase(db, lang), tour:adTour(db, post, context, lang), contactName:strategy.contact_name }), null, 2);
+    contenido = JSON.stringify(ads.finalize(json, { base:ad_base || ads.nextBase(db, lang), tour:adTour(db, post, context, lang), contactName:strategy.contact_name, precio:price }), null, 2);
     copyPending = JSON.parse(contenido).pending;
   } else if (tipo === 'carrusel') {
     let json;
@@ -359,7 +380,7 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source
       validation.errors.push(...validateCarouselResources(json,context.resources.filter(x=>x.tipo==='foto'),context.info.filter(x=>x.tipo==='testimonio')));
       validation.ok = !validation.errors.length;
       if (!validation.ok && repair && !repair_feedback) {
-        return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, analysis_filters, platform_override, strict,
+        return generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source_content, video_config, analysis_filters, platform_override, strict, precio,
           repair_feedback: `Errores: ${validation.errors.join('; ')}\nRespuesta fallida:\n${String(texto).slice(0, 6000)}` }, { fetchImpl, save, package_id, repair:false });
       }
       if (!validation.ok) {
@@ -367,7 +388,9 @@ async function generate(db, { post_id, plan_idea_id, brief, tipo, idioma, source
         throw err(502, `Carrusel incompleto: ${validation.errors.join('; ')}. Guardado como revisión fallida; no se guardó el paquete.`);
       }
     }
-    contenido = JSON.stringify(carouselExport(json, lang), null, 2); // valida tipo, layouts y compatibilidad
+    const exported = carouselExport(json, lang); // valida tipo, layouts y compatibilidad
+    if (price) copyPending = carouselPrice(exported, price, lang);
+    contenido = JSON.stringify(exported, null, 2);
   } else if (tipo === 'copy') {
     const split = splitCopyPending(sanitizeCopy(contenido));
     contenido = split.text;
@@ -456,6 +479,8 @@ async function generatePackage(db, input = {}, deps = {}) {
   if (isAd && !['imagen_unica', 'carrusel'].includes(adVisual)) throw err(400, 'El visual del anuncio debe ser imagen única o carrusel');
   const adPlatform = isAd ? (['instagram', 'facebook'].includes(post.plataforma) ? post.plataforma : 'instagram') : null;
   if (isAd) { post.plataforma = adPlatform; post.plataformas_destino = ['facebook', 'instagram']; }
+  const precio = isAd ? ads.normalizePrice(input.precio) : null;
+  if (precio) post.precio = precio;
   if(extra)post.formato=['guion','prompt_flow'].includes(extra)?'reel':isAd?adVisual:extra;
   const lang = input.idioma || post.idioma;
   const videoConfig = { clipSeconds: input.clip_seconds || input.video_config?.clipSeconds || 10, speechWpm: input.speech_wpm || input.video_config?.speechWpm || 150 };
@@ -469,8 +494,8 @@ async function generatePackage(db, input = {}, deps = {}) {
     primary = await generate(db, { ...input, idioma:lang, tipo:'guion', strict:true, analysis_filters, video_config:videoConfig }, { ...deps, save:false });
     additional = await generate(db, { ...input, idioma:lang, tipo:'prompt_flow', strict:true, analysis_filters, source_content:primary.contenido, video_config:videoConfig }, { ...deps, save:false });
   } else if (isAd) {
-    primary = await generate(db, { ...input, idioma:lang, tipo:adVisual, strict:true, analysis_filters, platform_override:adPlatform }, { ...deps, save:false });
-    additional = await generate(db, { ...input, idioma:lang, tipo:'anuncio_meta', analysis_filters, platform_override:adPlatform, source_content:primary.contenido }, { ...deps, save:false });
+    primary = await generate(db, { ...input, idioma:lang, tipo:adVisual, strict:true, analysis_filters, platform_override:adPlatform, precio }, { ...deps, save:false });
+    additional = await generate(db, { ...input, idioma:lang, tipo:'anuncio_meta', analysis_filters, platform_override:adPlatform, source_content:primary.contenido, precio }, { ...deps, save:false });
     additional.plataforma = null; // Un mismo anuncio se muestra en Facebook e Instagram; el JSON declara las ubicaciones.
   } else if (extra) {
     primary = await generate(db, { ...input, idioma:lang, tipo:extra, strict:true, analysis_filters, video_config:videoConfig }, { ...deps, save:false });
@@ -484,7 +509,7 @@ async function generatePackage(db, input = {}, deps = {}) {
     image.copies = copies.map((x,i)=>({ plataforma:destinos[i], idioma:x.idioma, text:x.contenido }));
     primary.contenido = JSON.stringify(image, null, 2);
   }
-  const imagePending=primary?.tipo==='imagen_unica'?JSON.parse(primary.contenido).pending:[];
+  const imagePending=primary?.tipo==='imagen_unica'?JSON.parse(primary.contenido).pending:primary?.tipo==='carrusel'?primary.pending:[];
   const pending = [...new Set([imagePending,findPending(primary?.contenido), isAd ? additional.pending : findPending(additional?.contenido), ...copies.map(x => [...x.pending, ...findPending(x.contenido)])].flat())];
   const warnings = [];
   if (!context.resources.length) warnings.push('No hay recursos visuales relacionados aprobados; cualquier imagen debe proporcionarse o quedar como marcador.');

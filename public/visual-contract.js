@@ -32,6 +32,8 @@
       if (words(x?.visual?.[field]) > (options.limits || limits.single)[field]) errors.push(`visual.${field}: máximo ${(options.limits || limits.single)[field]} palabras`);
       if (String(x?.visual?.[field] || '').length > (options.limits || limits.single)[field] * limits.charactersPerWord) errors.push(`visual.${field}: excede el límite de caracteres`);
     }
+    // Precio opcional: lo coloca el servidor desde el dato escrito por una persona, nunca la IA.
+    if (x?.visual?.price != null && (typeof x.visual.price !== 'string' || words(x.visual.price) > 8 || x.visual.price.length > 40)) errors.push('visual.price: máximo 8 palabras y 40 caracteres');
     const nonEmpty = v => typeof v === 'string' && v.trim().length > 0;
     if (!nonEmpty(x?.visual?.headline)) errors.push('visual.headline: obligatorio');
     if (!nonEmpty(x?.alt)) errors.push('alt: texto alternativo obligatorio');

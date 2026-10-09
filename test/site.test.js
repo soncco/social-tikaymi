@@ -43,6 +43,30 @@ test('copia local se actualiza manualmente y retira aprobación solo cuando camb
   db.close();
 });
 
+test('actualización individual consulta solo la URL pedida y conserva o retira su aprobación según el hash', async () => {
+  const db = open(':memory:');
+  await site.sync(db, { fetchImpl:mock('Contenido original') });
+  site.approve(db, URL, true);
+  site.approve(db, EN, true);
+  const calls=[];
+  const response = title => ({ ok:true, status:200, url:URL, headers:{ get:()=>null }, text:async()=>html(title) });
+  const changed = await site.refreshPage(db, URL, { fetchImpl:async url=>{calls.push(url);return response('Contenido actualizado');} });
+  assert.deepEqual(calls,[URL], 'no vuelve a pedir el sitemap ni la versión inglesa');
+  assert.equal(changed.changed,true);
+  assert.equal(changed.approved,false);
+  assert.equal(db.prepare('SELECT approved,title FROM site_pages WHERE url=?').get(URL).approved,0);
+  assert.equal(db.prepare('SELECT approved FROM site_pages WHERE url=?').get(EN).approved,1);
+
+  site.approve(db, URL, true);
+  const unchanged = await site.refreshPage(db, URL, { fetchImpl:async url=>response('Contenido actualizado') });
+  assert.equal(unchanged.changed,false);
+  assert.equal(unchanged.approved,true);
+  await assert.rejects(()=>site.refreshPage(db,'https://evil.example/blog/a/',{fetchImpl:async()=>{throw new Error('no debe consultar dominios externos');}}),/Solo se pueden actualizar/);
+  await assert.rejects(()=>site.refreshPage(db,URL,{fetchImpl:async url=>({ok:false,status:503,url})}),/respondió 503/);
+  assert.equal(db.prepare('SELECT approved,title FROM site_pages WHERE url=?').get(URL).approved,1,'un fallo conserva la copia y aprobación anterior');
+  db.close();
+});
+
 test('el plan usa el catálogo local sin acceder a la red y conserva el vínculo a la fuente', async () => {
   const db = open(':memory:');
   await site.sync(db, { fetchImpl:mock('Palcoyo o Vinicunca') });
@@ -99,6 +123,9 @@ test('API del sitio expone la copia local y guarda aprobación autenticada', asy
     const result = await fetch(base + '/site/approve', { ...options, method:'PUT', body:JSON.stringify({ url:URL, approved:true }) });
     assert.equal(result.status, 200);
     assert.equal(db.prepare('SELECT approved FROM site_pages WHERE url=?').get(URL).approved, 1);
+    const refresh = await fetch(base + '/site/pages/refresh', { ...options, method:'POST', body:JSON.stringify({url:'https://evil.example/blog/a/'}) });
+    assert.equal(refresh.status,400);
+    assert.equal(db.prepare('SELECT approved FROM site_pages WHERE url=?').get(URL).approved,1);
   } finally { server.close(); db.close(); }
 });
 
